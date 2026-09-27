@@ -10,11 +10,10 @@ no third-party emulator code. It does reuse the owner's own in-house cores:
 the Z80 is MegaRust's, and the VDP and PSG are adapted from MegaRust's. Each
 such file says where it came from and at which commit.
 
-Started 2026-09-27. With NO BIOS file, on ColecoRust's own HLE BIOS, 153 of the
-collection's 164 commercial titles reach gameplay (151 on the real BIOS). Every
-title that reaches gameplay on the real BIOS does so on the HLE; the two more
-are the smoke script's timing (both run on the real BIOS too, just not at the
-frames the script looks).
+Started 2026-09-27. With NO BIOS file, on ColecoRust's own HLE BIOS, 151 of the
+collection's 164 commercial titles reach gameplay (151 on the real BIOS). The
+titles either side of that line differ only by the smoke script's timing: each
+one reaches the same screens on both, at other frames than the script looks.
 
 ## The point of this core is the HLE BIOS
 
@@ -103,7 +102,7 @@ is the right one here, but it needs a rule or it becomes an opinion:
 | SN76489 | adapted from MegaRust to TI's SN76489AN (15-bit noise register); 44.1 kHz mono |
 | Controllers and keypad | joystick and keypad modes; all twelve keypad codes checked against the real BIOS decoding table (`*` and `#` were swapped, fixed) |
 | Mapper / bank switching | not started |
-| HLE BIOS | image, own font, hand-over boot, and 36 routines: VDP registers and VRAM, tables, sprites, font, RNG, MODE_1, controllers and keypad, GAME_OPT (the standard skill menu), the sound driver (including game-supplied special sounds, which call back into the cartridge), the object system (ACTIVATE, PUTOBJ, INIT_WRITER, WRITER: all five object types), the timers (INIT_TIMER, TIME_MGR, REQUEST, TEST and FREE_SIGNAL) and the graphics transforms (REFLECT_VERTICAL and _HORIZONTAL, ROTATE_90, ENLARGE), plus six addresses inside the BIOS that games call directly (`routines::ENTRY_POINTS`) and the seventeen P entries, which take their parameters from after the CALL (`hle/pvariant.rs`). Every one of the jump table's 53 routines is written. The objects, timers and sound driver match the real BIOS on every sampled call, registers included. The image also carries the VDP port numbers at `$1D43`/`$1D47`, where nine titles and much homebrew look them up. **153 of 164 commercial titles ALIVE with no BIOS file** (151 on the real BIOS), and 41 of 48 public-domain titles; `ledger/smoke-hle.tsv` |
+| HLE BIOS | image, own font, hand-over boot, and 36 routines: VDP registers and VRAM, tables, sprites, font, RNG, MODE_1, controllers and keypad, GAME_OPT (the standard skill menu), the sound driver (including game-supplied special sounds, which call back into the cartridge), the object system (ACTIVATE, PUTOBJ, INIT_WRITER, WRITER: all five object types), the timers (INIT_TIMER, TIME_MGR, REQUEST, TEST and FREE_SIGNAL) and the graphics transforms (REFLECT_VERTICAL and _HORIZONTAL, ROTATE_90, ENLARGE), plus six addresses inside the BIOS that games call directly (`routines::ENTRY_POINTS`) and the seventeen P entries, which take their parameters from after the CALL (`hle/pvariant.rs`). Every one of the jump table's 53 routines is written. The objects, timers and sound driver match the real BIOS on every sampled call, registers included. The image also carries the VDP port numbers at `$1D43`/`$1D47`, where nine titles and much homebrew look them up. **151 of 164 commercial titles ALIVE with no BIOS file** (151 on the real BIOS), and 41 of 48 public-domain titles; `ledger/smoke-hle.tsv` |
 | Save states | v1 layout, fixed size, round-trip tested |
 | libretro | `libcolecorust_libretro`: always the HLE BIOS (never asks for coleco.rom), 256x192 XRGB8888, 44.1 kHz, save states, SYSTEM_RAM and SET_MEMORY_MAPS, keypad in Gearcoleco's scheme, which Trophy Hub's on-screen keypad sends (Y X L R = 1-4, L2 R2 L3 R3 = 5-8, left stick Y/X = 9/0, START = *, SELECT = #), and a keyboard. Builds for arm64 Android; `scripts/deploy-android-debug.sh` |
 | Corpus smoke, REAL BIOS | 151 of 164 commercial titles and 42 of 48 PD titles ALIVE, 0 crashed; `ledger/smoke-real-bios.tsv`, `cargo run --release -p coleco-runner --bin smoke` |

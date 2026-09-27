@@ -142,6 +142,9 @@ pub struct ColecoBus {
     /// The VDP interrupt line rose while lines were being closed. Set and
     /// consumed within one `Coleco::step`, so never part of a save state.
     irq_rose: bool,
+    /// Lines closed since power-on, for counting frames across a step that
+    /// closes many. A diagnostic, not machine state.
+    lines_closed: u64,
 }
 
 impl ColecoBus {
@@ -164,6 +167,7 @@ impl ColecoBus {
             self.line_cycles -= CYCLES_PER_LINE;
             let before = self.vdp.irq();
             self.vdp.end_line();
+            self.lines_closed += 1;
             if !before && self.vdp.irq() {
                 self.irq_rose = true;
             }
@@ -261,6 +265,10 @@ pub struct Coleco {
     hle: bool,
     /// What the HLE could not serve. Diagnostics, not machine state.
     pub hle_log: crate::hle::HleLog,
+    /// Where the next `run_frame` ends, in lines closed since power-on:
+    /// frames stay a frame of time apart even when one step spans several.
+    /// Not machine state: rebuilt from the VDP's line after a load.
+    next_frame_end: Option<u64>,
 }
 
 impl Coleco {
@@ -288,6 +296,7 @@ impl Coleco {
             in_line: false,
             cycles: 0,
             irq_rose: false,
+            lines_closed: 0,
         };
         let mut m = Coleco {
             cpu: Z80::new(),
@@ -296,6 +305,7 @@ impl Coleco {
             nmis: 0,
             hle,
             hle_log: Default::default(),
+            next_frame_end: None,
         };
         m.cpu.reset();
         Ok(m)
@@ -408,10 +418,25 @@ impl Coleco {
         }
     }
 
+    /// Run to the end of the frame, in time: to the next frame boundary,
+    /// 262 lines after the last. Not "262 lines' worth of steps": an HLE
+    /// routine can close many lines in one step, and counting it as one let
+    /// a frame run on for two frames' time or more. The frontend runs one of
+    /// these per frame it shows, so games calling long routines every frame
+    /// ran fast (Donkey Kong at about 1.5 times). A step that carries past
+    /// the boundary has used up the frames it spans: the calls for them
+    /// return at once, and the display shows the same picture again, as the
+    /// real one would while the routine ran.
     pub fn run_frame(&mut self) {
-        for _ in 0..vdp::LINES_PER_FRAME {
-            self.run_line();
+        let end = match self.next_frame_end {
+            Some(end) => end,
+            // The lines this frame still has to close, the open one included.
+            None => self.bus.lines_closed + vdp::LINES_PER_FRAME.saturating_sub(self.bus.vdp.line) as u64,
+        };
+        while self.bus.lines_closed < end {
+            self.step();
         }
+        self.next_frame_end = Some(end + vdp::LINES_PER_FRAME as u64);
     }
 
     pub fn framebuffer(&self) -> &[u32] {
@@ -458,6 +483,7 @@ impl Coleco {
         self.int_line = r.bool()?;
         self.bus.line_cycles = r.i32()?;
         self.bus.in_line = r.bool()?;
+        self.next_frame_end = None;
         r.finish()
     }
 }
@@ -506,6 +532,28 @@ mod tests {
         // This Z80 holds the PC on the HALT while halted.
         assert_eq!(m.cpu.pc, 0x0003, "parked on the HALT at $0003");
         assert!(m.cpu.halted);
+    }
+
+    /// A frame is a frame of time however long the steps inside it: here the
+    /// cartridge fills all of VRAM over and over, each call about eleven
+    /// frames long, and ten frames still take ten frames' time, give or take
+    /// the one step that carries over the last boundary.
+    #[test]
+    fn a_frame_is_a_frame_of_time_even_with_long_hle_steps() {
+        // $8100: LD HL,0; LD DE,$4000; XOR A; CALL $1F82; JR $8100
+        let mut cart = vec![0u8; 0x200];
+        cart[0..2].copy_from_slice(&[0x55, 0xaa]);
+        cart[0x0a..0x0c].copy_from_slice(&[0x00, 0x81]);
+        let code = [0x21, 0x00, 0x00, 0x11, 0x00, 0x40, 0xaf, 0xcd, 0x82, 0x1f, 0x18, 0xf4];
+        cart[0x100..0x100 + code.len()].copy_from_slice(&code);
+        let mut m = Coleco::new(Firmware::Hle, &cart).unwrap();
+        let frame = (CYCLES_PER_LINE as u64) * vdp::LINES_PER_FRAME as u64;
+        for _ in 0..10 {
+            m.run_frame();
+        }
+        let fill = 60 + 41 * 0x4000u64;
+        assert!(m.cycles() <= 10 * frame + fill + 1000, "{} cycles for 10 frames", m.cycles());
+        assert!(m.cycles() >= 10 * frame, "{} cycles for 10 frames", m.cycles());
     }
 
     /// A call to a BIOS address that is no routine returns to its caller and

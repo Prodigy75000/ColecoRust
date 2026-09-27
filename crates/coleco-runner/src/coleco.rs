@@ -146,7 +146,7 @@ fn main() {
     println!("ColecoRust, save-state v{SAVE_STATE_VERSION}, {mode:?} BIOS");
     println!("  cart     {cart_path} ({} bytes)", cart.len());
     println!("  frames   {frames} ({:.2} s emulated at {CPU_HZ} Hz)", frames as f64 * 262.0 * 228.0 / CPU_HZ as f64);
-    println!("  nmis     {}", m.nmis);
+    println!("  nmis     {} in {} cycles, {:.2} per frame of time", m.nmis, m.cycles(), m.nmis as f64 * 59736.0 / m.cycles().max(1) as f64);
     println!(
         "  cpu      PC {:04X} SP {:04X} AF {:02X}{:02X} BC {:04X} DE {:04X} HL {:04X} IM {} IFF1 {}",
         m.cpu.pc, m.cpu.sp, m.cpu.a(), m.cpu.f, m.cpu.bc(), m.cpu.de(), m.cpu.hl(), m.cpu.im, m.cpu.iff1
