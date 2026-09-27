@@ -100,6 +100,10 @@ pub fn call(target: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<i32> {
         0x18e9 => mode_1(cpu, bus),
         0x1c66 => init_spr_order(cpu, bus),
         0x1c82 => wr_spr_nm_tbl(cpu, bus),
+        0x114a => controller_scan(cpu, bus),
+        0x116a => update_spinner(cpu, bus),
+        0x118b => decoder(cpu, bus),
+        0x11c1 => poller(cpu, bus),
         _ => return None,
     })
 }
@@ -391,6 +395,296 @@ fn wr_spr_nm_tbl(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     80 + 150 * n as i32
 }
 
+// ---- controllers ----
+
+/// What the keypad's inverted four-bit code means: key 0-9, `$0A` for `*`,
+/// `$0B` for `#`, `$0F` for none or an impossible code. Interface: this is
+/// the meaning of the hardware's codes, as the real BIOS decodes them.
+const KEYPAD: [u8; 16] = [0x0f, 0x06, 0x01, 0x03, 0x09, 0x00, 0x0a, 0x0f, 0x02, 0x0b, 0x07, 0x0f, 0x05, 0x04, 0x08, 0x0f];
+
+/// Read a controller port, inverted so a pressed input reads as a 1.
+fn read_pad(bus: &mut ColecoBus, player: u8) -> u8 {
+    use crate::z80::Bus;
+    !bus.input(if player == 0 { 0xfc } else { 0xff })
+}
+
+/// Flags as CPL leaves them: H and N set, bits 5 and 3 from A, the rest kept.
+fn cpl_flags(f: u8, a: u8) -> u8 {
+    (f & 0xc5) | 0x12 | (a & 0x28)
+}
+
+/// CONTROLLER_SCAN (`$1F76`): both controllers read in joystick mode into
+/// `$73EE`/`$73EF`, then in keypad mode into `$73F0`/`$73F1`, inverted, and
+/// the ports left in joystick mode. The four bytes 40 or more titles read.
+fn controller_scan(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
+    use crate::z80::Bus;
+    let j1 = read_pad(bus, 0);
+    let j2 = read_pad(bus, 1);
+    bus.output(0x80, j2);
+    let k1 = read_pad(bus, 0);
+    let k2 = read_pad(bus, 1);
+    bus.output(0xc0, k2);
+    for (addr, v) in [(0x73ee, j1), (0x73ef, j2), (0x73f0, k1), (0x73f1, k2)] {
+        bus.write(addr, v);
+    }
+    cpu.set_a(k2);
+    cpu.f = cpl_flags(cpu.f, k2);
+    150
+}
+
+/// UPDATE_SPINNER (`$1F88`): each controller's spinner, from port bits 4
+/// (no movement when set) and 5 (direction), steps its count at `$73EB`/
+/// `$73EC` down or up.
+fn update_spinner(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
+    use crate::z80::Bus;
+    let mut f = cpu.f;
+    for (player, addr) in [(0u8, 0x73ebu16), (1, 0x73ec)] {
+        let raw = bus.input(if player == 0 { 0xfc } else { 0xff });
+        cpu.set_a(raw);
+        if raw & 0x10 == 0 {
+            let v = bus.peek(addr);
+            let next = if raw & 0x20 == 0 { v.wrapping_sub(1) } else { v.wrapping_add(1) };
+            bus.write(addr, next);
+            // INC/DEC (HL): S, Z, H, V, N from the result, carry kept.
+            let dec = raw & 0x20 == 0;
+            let half = if dec { v & 0x0f == 0 } else { v & 0x0f == 0x0f };
+            let over = if dec { v == 0x80 } else { v == 0x7f };
+            f = (f & 0x01)
+                | (next & 0xa8)
+                | if next == 0 { 0x40 } else { 0 }
+                | if half { 0x10 } else { 0 }
+                | if over { 0x04 } else { 0 }
+                | if dec { 0x02 } else { 0 };
+        } else {
+            // BIT 4 set: Z clear, H set, bits 5 and 3 from the port byte.
+            f = (f & 0x01) | 0x10 | (raw & 0x28);
+        }
+        cpu.set_hl(if player == 0 { 0x73eb } else { 0x73ec });
+    }
+    cpu.f = f;
+    80
+}
+
+/// DECODER (`$1F79`): controller H (0 or 1), part L: 0 the joystick
+/// (directions in L, fire in H, the spinner count in E, which is then
+/// cleared), 1 the keypad (the decoded key in L, the other fire in H).
+fn decoder(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
+    use crate::z80::Bus;
+    let player = (cpu.hl() >> 8) as u8;
+    let keypad = cpu.hl() as u8 == 1;
+    let raw;
+    if keypad {
+        bus.output(0x80, cpu.a());
+        raw = read_pad(bus, player);
+        bus.output(0xc0, raw);
+        let code = raw & 0x0f;
+        set_bc(cpu, 0, code);
+        cpu.set_hl(u16::from_be_bytes([raw & 0x40, KEYPAD[code as usize]]));
+    } else {
+        let spin_addr = if player == 0 { 0x73eb } else { 0x73ec };
+        let spin = bus.peek(spin_addr);
+        bus.write(spin_addr, 0);
+        cpu.set_bc(spin_addr);
+        raw = read_pad(bus, player);
+        cpu.set_de(u16::from_be_bytes([raw, spin]));
+        cpu.set_hl(u16::from_be_bytes([raw & 0x40, raw & 0x0f]));
+    }
+    if keypad {
+        cpu.set_de(u16::from_be_bytes([raw, cpu.de() as u8]));
+    }
+    cpu.set_a(raw & 0x40);
+    // AND $40 is the last flag-setter: H set, S/Z/P/5/3 from the result.
+    cpu.f = sz53p(raw & 0x40) | 0x10;
+    120
+}
+
+/// Flags as `AND n` leaves them: S, Z, bits 5 and 3, parity, H set.
+fn and_flags(result: u8) -> u8 {
+    sz53p(result) | 0x10
+}
+
+/// Flags as `BIT n,r` leaves them for a register: Z and V set when the bit
+/// is clear, S when bit 7 is tested and set, H set, bits 5 and 3 from the
+/// register, carry kept.
+fn bit_flags(f: u8, n: u32, r: u8) -> u8 {
+    let set = r & (1 << n) != 0;
+    (f & 0x01)
+        | 0x10
+        | (r & 0x28)
+        | if set { 0 } else { 0x44 }
+        | if set && n == 7 { 0x80 } else { 0 }
+}
+
+/// Flags as `ADD rr,rr` leaves them: S, Z and V kept, H from bit 11, carry
+/// from bit 15, N clear, bits 5 and 3 from the result's high byte.
+fn add16_flags(f: u8, a: u16, b: u16) -> u8 {
+    let r = a.wrapping_add(b);
+    (f & 0xc4)
+        | ((r >> 8) as u8 & 0x28)
+        | if (a & 0x0fff) + (b & 0x0fff) > 0x0fff { 0x10 } else { 0 }
+        | u8::from(a as u32 + b as u32 > 0xffff)
+}
+
+/// The registers POLLER works in, so it can leave them as the real one
+/// does: a game may read any of them after the call.
+struct Regs {
+    a: u8,
+    f: u8,
+    b: u8,
+    c: u8,
+    de: u16,
+    hl: u16,
+    ix: u16,
+    iy: u16,
+}
+
+/// One debounced input, as POLLER keeps it at `iy+slot`: the last reading
+/// and whether it has been confirmed. A reading reaches the game's output
+/// byte `ix+out` only when two scans in a row agree, once per change.
+/// `mask` picks the input's bits from the raw byte in C; the keypad's
+/// reading is decoded through the key table on the way out. Leaves A and F
+/// as the real helpers do (they preserve BC, DE and HL).
+fn debounce(r: &mut Regs, bus: &mut ColecoBus, mask: u8, slot: u16, out: u16, keypad: bool) {
+    use crate::z80::Bus;
+    let e = r.c & mask;
+    let state = r.iy.wrapping_add(slot);
+    let last = bus.peek(state);
+    let confirmed = bus.peek(state.wrapping_add(1));
+    if confirmed == 0 {
+        r.f = cp_flags(e, last);
+        if e != last {
+            bus.write(state, e);
+            r.a = e;
+        } else {
+            bus.write(state.wrapping_add(1), 1);
+            if keypad {
+                let key = KEYPAD[e as usize];
+                bus.write(r.ix.wrapping_add(out), key);
+                r.a = key;
+                r.f = add16_flags(r.f, 0x10f5, e as u16);
+            } else {
+                bus.write(r.ix.wrapping_add(out), e);
+                r.a = 1;
+            }
+        }
+    } else {
+        r.f = cp_flags(e, last);
+        r.a = e;
+        if e != last {
+            bus.write(state, e);
+            bus.write(state.wrapping_add(1), 0);
+            r.a = 0;
+            r.f = 0x44;
+        }
+    }
+}
+
+/// The joystick half for one player (the real one's `$1220`): directions,
+/// fire, spinner, as config B asks. Raw joystick byte in A, spinner count
+/// at HL.
+fn poll_joystick(r: &mut Regs, bus: &mut ColecoBus) {
+    use crate::z80::Bus;
+    r.c = r.a;
+    r.f = bit_flags(r.f, 1, r.b);
+    if r.b & 0x02 != 0 {
+        debounce(r, bus, 0x0f, 2, 1, false);
+        r.a = r.c;
+    }
+    r.f = bit_flags(r.f, 0, r.b);
+    if r.b & 0x01 != 0 {
+        debounce(r, bus, 0x40, 0, 0, false);
+        r.a = r.c;
+    }
+    r.f = bit_flags(r.f, 2, r.b);
+    if r.b & 0x04 != 0 {
+        let spin = bus.peek(r.hl);
+        let acc = bus.peek(r.ix.wrapping_add(2));
+        bus.write(r.ix.wrapping_add(2), spin.wrapping_add(acc));
+        bus.write(r.hl, 0);
+        r.a = 0;
+        r.f = 0x44;
+    }
+}
+
+/// The keypad half (`$123F`): the second fire and the keypad. Raw keypad-
+/// mode byte in A.
+fn poll_keypad(r: &mut Regs, bus: &mut ColecoBus) {
+    r.c = r.a;
+    r.f = bit_flags(r.f, 3, r.b);
+    if r.b & 0x08 != 0 {
+        debounce(r, bus, 0x40, 6, 3, false);
+        r.a = r.c;
+    }
+    r.f = bit_flags(r.f, 4, r.b);
+    if r.b & 0x10 != 0 {
+        debounce(r, bus, 0x0f, 8, 4, true);
+    }
+}
+
+/// POLLER (`$1FEB`): CONTROLLER_SCAN, then for each player enabled in the
+/// cartridge's controller map (pointer at `$8008`: a config byte per
+/// player, bit 7 enabling, then five output bytes each), the inputs the
+/// config asks for, debounced: bit 0 fire, bit 1 joystick, bit 2 spinner
+/// (accumulated), bit 3 the second fire, bit 4 the keypad (decoded).
+/// Debounce state at `$73D7`, ten bytes per player.
+fn poller(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
+    let cycles = controller_scan(cpu, bus);
+    let map = ram16(bus, 0x8008);
+    let mut r = Regs {
+        a: cpu.a(),
+        f: cpu.f,
+        b: b(cpu),
+        c: cpu.bc() as u8,
+        de: cpu.de(),
+        hl: cpu.hl(),
+        ix: map,
+        iy: 0x73d7,
+    };
+    for player in 0..2u16 {
+        if player == 1 {
+            r.ix = map;
+        }
+        r.a = bus.peek(map.wrapping_add(player));
+        r.f = bit_flags(r.f, 7, r.a);
+        if r.a & 0x80 == 0 {
+            if player == 0 {
+                continue;
+            }
+            break;
+        }
+        r.b = r.a;
+        if player == 1 {
+            r.de = 10;
+            r.iy = r.iy.wrapping_add(10);
+        }
+        let step = if player == 0 { 2 } else { 7 };
+        r.de = step;
+        r.f = add16_flags(r.f, r.ix, step);
+        r.ix = r.ix.wrapping_add(step);
+        r.a &= 0x07;
+        r.f = and_flags(r.a);
+        if r.a != 0 {
+            r.a = bus.peek(0x73ee + player);
+            r.hl = 0x73eb + player;
+            poll_joystick(&mut r, bus);
+        }
+        r.a = r.b & 0x18;
+        r.f = and_flags(r.a);
+        if r.a != 0 {
+            r.a = bus.peek(0x73f0 + player);
+            poll_keypad(&mut r, bus);
+        }
+    }
+    cpu.set_a(r.a);
+    cpu.f = r.f;
+    set_bc(cpu, r.b, r.c);
+    cpu.set_de(r.de);
+    cpu.set_hl(r.hl);
+    cpu.ix = r.ix;
+    cpu.iy = r.iy;
+    cycles + 1380
+}
+
 /// RAND_GEN (`$1FFD`): a 16-bit shift register at `$73C8`, fed back from
 /// bits 15 and 8, shifted left. A := the new low byte.
 fn rand_gen(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
@@ -427,6 +721,83 @@ fn write_register(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Run one instruction on the real Z80 core from a given A, F, B and
+    /// HL/IX, and return the flags it leaves: the oracle for the helpers.
+    fn z80_flags(code: &[u8], a: u8, f: u8, b: u8, hl: u16) -> u8 {
+        use crate::z80::Bus;
+        struct Ram([u8; 0x10000]);
+        impl Bus for Ram {
+            fn read(&mut self, a: u16) -> u8 {
+                self.0[a as usize]
+            }
+            fn write(&mut self, a: u16, v: u8) {
+                self.0[a as usize] = v;
+            }
+            fn input(&mut self, _: u16) -> u8 {
+                0xff
+            }
+            fn output(&mut self, _: u16, _: u8) {}
+        }
+        let mut bus = Ram([0; 0x10000]);
+        bus.0[..code.len()].copy_from_slice(code);
+        let mut cpu = Z80::new();
+        cpu.reset();
+        cpu.set_a(a);
+        cpu.f = f;
+        cpu.set_bc(u16::from(b) << 8);
+        cpu.set_hl(hl);
+        cpu.ix = hl;
+        cpu.step(&mut bus);
+        cpu.f
+    }
+
+    #[test]
+    fn bit_and_add_flag_helpers_match_the_z80() {
+        for v in 0..=255u8 {
+            for f in [0x00u8, 0x01, 0xff] {
+                for n in 0..8u32 {
+                    let op = 0x40 | (n as u8) << 3; // BIT n,B
+                    assert_eq!(bit_flags(f, n, v), z80_flags(&[0xcb, op], 0, f, v, 0), "BIT {n},{v:02X}");
+                }
+            }
+            for k in [0u8, 1, 0x0f, 0x40, 0x7f, 0x80, 0xff, v] {
+                assert_eq!(and_flags(v & k), z80_flags(&[0xe6, k], v, 0xff, 0, 0), "AND {k:02X}");
+            }
+        }
+        for (x, y) in [(0x7000u16, 2u16), (0x70fe, 7), (0x0ffe, 2), (0xfffe, 7), (0x10f5, 0x0e)] {
+            for f in [0x00u8, 0xff] {
+                // ADD IX,DE with DE = y
+                let code = [0x11, y as u8, (y >> 8) as u8, 0xdd, 0x19];
+                let got = {
+                    use crate::z80::Bus;
+                    struct Ram([u8; 0x10000]);
+                    impl Bus for Ram {
+                        fn read(&mut self, a: u16) -> u8 {
+                            self.0[a as usize]
+                        }
+                        fn write(&mut self, a: u16, v: u8) {
+                            self.0[a as usize] = v;
+                        }
+                        fn input(&mut self, _: u16) -> u8 {
+                            0xff
+                        }
+                        fn output(&mut self, _: u16, _: u8) {}
+                    }
+                    let mut bus = Ram([0; 0x10000]);
+                    bus.0[..5].copy_from_slice(&code);
+                    let mut cpu = Z80::new();
+                    cpu.reset();
+                    cpu.f = f;
+                    cpu.ix = x;
+                    cpu.step(&mut bus);
+                    cpu.step(&mut bus);
+                    cpu.f
+                };
+                assert_eq!(add16_flags(f, x, y), got, "ADD IX({x:04X}),{y:04X}");
+            }
+        }
+    }
 
     /// The block count as the real loop computes it, including both quirks.
     #[test]

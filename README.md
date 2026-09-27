@@ -98,9 +98,9 @@ is the right one here, but it needs a rule or it becomes an opinion:
 | Z80 | lifted from MegaRust (`origin/main` 3e97ca7), ZEXDOC and ZEXALL 79/79 here; `cargo run --release -p coleco-runner --bin zexall` |
 | TMS9918A | adapted from MegaRust's SG-1000 path to TI's chip (3-bit register select, Graphics II masks, no mode 4) |
 | SN76489 | adapted from MegaRust to TI's SN76489AN (15-bit noise register); 44.1 kHz mono |
-| Controllers and keypad | joystick and keypad modes; keypad key 1 confirmed through the real BIOS, the other eleven codes unverified |
+| Controllers and keypad | joystick and keypad modes; all twelve keypad codes checked against the real BIOS decoding table (`*` and `#` were swapped, fixed) |
 | Mapper / bank switching | not started |
-| HLE BIOS | image, own font, hand-over boot, and 13 routines (VDP registers and VRAM, tables, sprites, font, RNG, MODE_1), each clean on 100% of the corpus calls `routinediff` samples against the real BIOS. 62 commercial titles ALIVE with no BIOS file; `ledger/smoke-hle.tsv` |
+| HLE BIOS | image, own font, hand-over boot, and 17 routines (VDP registers and VRAM, tables, sprites, font, RNG, MODE_1, controllers and keypad), each clean on 100% of the corpus calls `routinediff` samples against the real BIOS. 95 of 164 commercial titles ALIVE with no BIOS file (151 on the real BIOS); `ledger/smoke-hle.tsv` |
 | Save states | v1 layout, fixed size, round-trip tested |
 | libretro | not started |
 | Corpus smoke, REAL BIOS | 151 of 164 commercial titles and 42 of 48 PD titles ALIVE, 0 crashed; `ledger/smoke-real-bios.tsv`, `cargo run --release -p coleco-runner --bin smoke` |

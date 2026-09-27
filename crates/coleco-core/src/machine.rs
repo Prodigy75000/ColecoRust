@@ -77,10 +77,14 @@ pub struct Pad {
 }
 
 /// The four-bit code the keypad puts on the port for keys 0-9, `*`, `#`,
-/// active low. From the commonly published table, UNVERIFIED here: the
-/// BIOS's own decoder turns these back into key numbers, so running it with
-/// the real BIOS is the check, and until that is done this is a claim.
-const KEYPAD_CODES: [u8; 12] = [0x0a, 0x0d, 0x07, 0x0c, 0x02, 0x03, 0x0e, 0x05, 0x01, 0x0b, 0x06, 0x09];
+/// active low.
+///
+/// Checked against the real BIOS's own decoding table (16 bytes at `$10F5`,
+/// indexed by the inverted nibble) on 2026-09-27: every digit decodes to
+/// itself. The first version, written from the commonly published table,
+/// had `*` and `#` the wrong way round: the BIOS decodes this `*` code to
+/// `$0A` and this `#` code to `$0B`, the values OS7 documents for them.
+const KEYPAD_CODES: [u8; 12] = [0x0a, 0x0d, 0x07, 0x0c, 0x02, 0x03, 0x0e, 0x05, 0x01, 0x0b, 0x09, 0x06];
 
 impl Pad {
     /// The byte a read returns in joystick mode: directions in bits 0-3 and
