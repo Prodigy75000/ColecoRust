@@ -69,9 +69,7 @@ fn set16(bus: &mut ColecoBus, addr: u16, v: u16) {
 fn song_area(bus: &mut ColecoBus, song: u8) -> (u16, u16) {
     let table = ram16(bus, 0x7020);
     // The real one scales the song number by rotating it left twice.
-    let entry = table
-        .wrapping_sub(4)
-        .wrapping_add(song.rotate_left(2) as u16);
+    let entry = table.wrapping_sub(4).wrapping_add(song.rotate_left(2) as u16);
     (ram16(bus, entry.wrapping_add(2)), entry)
 }
 
@@ -426,11 +424,7 @@ pub fn resume(pc: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
 /// Tones get attenuation and frequency; noise gets attenuation, and its
 /// control only when it changed.
 pub fn play_songs(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
-    for (ptr, silence, att, freq) in [
-        (0x7024u16, 0x9fu8, 0x90u8, 0x80u8),
-        (0x7026, 0xbf, 0xb0, 0xa0),
-        (0x7028, 0xdf, 0xd0, 0xc0),
-    ] {
+    for (ptr, silence, att, freq) in [(0x7024u16, 0x9fu8, 0x90u8, 0x80u8), (0x7026, 0xbf, 0xb0, 0xa0), (0x7028, 0xdf, 0xd0, 0xc0)] {
         let area = ram16(bus, ptr);
         if bus.peek(area) == 0xff {
             bus.output(0xff, silence);

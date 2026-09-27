@@ -29,12 +29,7 @@ pub fn pads_at(f: u32) -> [Pad; 2] {
     let held = |at: &[u32]| at.iter().any(|&a| (a..a + HOLD).contains(&f));
     let key = held(&KEY_AT).then_some(1);
     let fire = held(&FIRE_AT);
-    let pad = Pad {
-        key,
-        fire_left: fire,
-        fire_right: fire,
-        ..Pad::default()
-    };
+    let pad = Pad { key, fire_left: fire, fire_right: fire, ..Pad::default() };
     [pad, pad]
 }
 
@@ -48,9 +43,7 @@ pub fn cartridges(dir: &Path) -> Vec<PathBuf> {
 }
 
 pub fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(rd) = std::fs::read_dir(dir) else {
-        return;
-    };
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
     let mut entries: Vec<_> = rd.flatten().map(|e| e.path()).collect();
     entries.sort();
     for p in entries {
@@ -67,11 +60,7 @@ pub fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
 /// variants of one game share. The denominator is counted in titles, not
 /// files: the collection's 300 cartridge files are far fewer games.
 pub fn classify(file: &str) -> (&'static str, &'static str, String) {
-    let class = if file.contains("(PD)") || file.contains("Public Domain/") {
-        "pd"
-    } else {
-        "commercial"
-    };
+    let class = if file.contains("(PD)") || file.contains("Public Domain/") { "pd" } else { "commercial" };
     let name = file.rsplit('/').next().unwrap_or(file);
     let dump = if name.contains("[b") {
         "bad"
@@ -102,11 +91,7 @@ pub fn header(cart: &[u8]) -> &'static str {
 pub fn representatives(paths: &[PathBuf], root: &Path) -> Vec<PathBuf> {
     let mut best: BTreeMap<(String, &'static str), (u8, PathBuf)> = BTreeMap::new();
     for p in paths {
-        let file = p
-            .strip_prefix(root)
-            .unwrap_or(p)
-            .to_string_lossy()
-            .replace('\\', "/");
+        let file = p.strip_prefix(root).unwrap_or(p).to_string_lossy().replace('\\', "/");
         let (class, dump, title) = classify(&file);
         let rank = match dump {
             "good" => 0,

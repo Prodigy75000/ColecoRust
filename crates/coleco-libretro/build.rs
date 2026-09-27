@@ -41,17 +41,10 @@ fn main() {
 /// Re-run when the checked-out commit moves. `.git/HEAD` only changes with the
 /// branch, so the ref it points at is watched too.
 fn watch_git_head() {
-    let Some(manifest) = std::env::var("CARGO_MANIFEST_DIR")
-        .ok()
-        .map(std::path::PathBuf::from)
-    else {
+    let Some(manifest) = std::env::var("CARGO_MANIFEST_DIR").ok().map(std::path::PathBuf::from) else {
         return;
     };
-    let Some(git) = manifest
-        .ancestors()
-        .map(|a| a.join(".git"))
-        .find(|p| p.is_dir())
-    else {
+    let Some(git) = manifest.ancestors().map(|a| a.join(".git")).find(|p| p.is_dir()) else {
         return;
     };
     let head = git.join("HEAD");

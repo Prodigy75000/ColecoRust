@@ -74,9 +74,7 @@ fn differences(real: &Coleco, hle: &Coleco) -> Vec<String> {
     // Reported apart as STACK so it cannot hide a real RAM difference.
     let sp = real.cpu.sp as usize & 0x3ff;
     let below_sp = |i: usize| (sp.wrapping_sub(i) & 0x3ff) <= 48 && i != sp;
-    let all: Vec<usize> = (0..real.bus.ram.len())
-        .filter(|&i| real.bus.ram[i] != hle.bus.ram[i])
-        .collect();
+    let all: Vec<usize> = (0..real.bus.ram.len()).filter(|&i| real.bus.ram[i] != hle.bus.ram[i]).collect();
     let (stack, ram): (Vec<usize>, Vec<usize>) = all.into_iter().partition(|&i| below_sp(i));
     if !stack.is_empty() {
         d.push(format!("STACK x{}", stack.len()));
@@ -85,27 +83,14 @@ fn differences(real: &Coleco, hle: &Coleco) -> Vec<String> {
         let shown: Vec<String> = ram
             .iter()
             .take(8)
-            .map(|&i| {
-                format!(
-                    "{:04X} {:02X}/{:02X}",
-                    0x7000 + i,
-                    real.bus.ram[i],
-                    hle.bus.ram[i]
-                )
-            })
+            .map(|&i| format!("{:04X} {:02X}/{:02X}", 0x7000 + i, real.bus.ram[i], hle.bus.ram[i]))
             .collect();
         d.push(format!("RAM x{} {}", ram.len(), shown.join(" ")));
     }
     let (rv, hv) = (&real.bus.vdp.vram, &hle.bus.vdp.vram);
     let vram: Vec<usize> = (0..rv.len()).filter(|&i| rv[i] != hv[i]).collect();
     if !vram.is_empty() {
-        d.push(format!(
-            "VRAM x{} first {:04X} {:02X}/{:02X}",
-            vram.len(),
-            vram[0],
-            rv[vram[0]],
-            hv[vram[0]]
-        ));
+        d.push(format!("VRAM x{} first {:04X} {:02X}/{:02X}", vram.len(), vram[0], rv[vram[0]], hv[vram[0]]));
     }
     // The VDP's state after its VRAM: registers, address, latch, buffer,
     // status. Not the scanline counter (the last two bytes), which is where
@@ -114,32 +99,18 @@ fn differences(real: &Coleco, hle: &Coleco) -> Vec<String> {
     let (rs, hs) = (&rs[..rs.len() - 2], &hs[..hs.len() - 2]);
     if rs[0x4000..] != hs[0x4000..] {
         if real.bus.vdp.regs != hle.bus.vdp.regs {
-            d.push(format!(
-                "VDP regs {:02X?}/{:02X?}",
-                real.bus.vdp.regs, hle.bus.vdp.regs
-            ));
+            d.push(format!("VDP regs {:02X?}/{:02X?}", real.bus.vdp.regs, hle.bus.vdp.regs));
         } else if rs[0x4008..0x400d] != hs[0x4008..0x400d] {
-            d.push(format!(
-                "VDP state {:02X?}/{:02X?}",
-                &rs[0x4008..],
-                &hs[0x4008..]
-            ));
+            d.push(format!("VDP state {:02X?}/{:02X?}", &rs[0x4008..], &hs[0x4008..]));
         } else {
             // Only the status flags and fifth-sprite number: set by lines
             // being drawn, which depends on when, not on the routine.
-            d.push(format!(
-                "VDPSTATUS {:02X?}/{:02X?}",
-                &rs[0x400d..],
-                &hs[0x400d..]
-            ));
+            d.push(format!("VDPSTATUS {:02X?}/{:02X?}", &rs[0x400d..], &hs[0x400d..]));
         }
     }
     // PSG registers only: its counters run with time, and a routine that
     // took a different number of cycles would differ there for no fault.
-    let (rp, hp) = (
-        real.bus.audio.psg.registers(),
-        hle.bus.audio.psg.registers(),
-    );
+    let (rp, hp) = (real.bus.audio.psg.registers(), hle.bus.audio.psg.registers());
     if rp != hp {
         d.push(format!("PSG {rp:03X?}/{hp:03X?}"));
     }
@@ -179,21 +150,9 @@ fn object_type(m: &Coleco, target: u16) -> Option<u8> {
     Some(m.bus.peek(word(descriptor)) & 0x0f)
 }
 
-fn run_title(
-    bios: &[u8],
-    cart: &[u8],
-    title: &str,
-    slot: u16,
-    target: u16,
-    show: &str,
-    t: &mut Tally,
-) {
-    let Ok(mut m) = Coleco::new(Coleco::bios_from_bytes(bios).unwrap(), cart) else {
-        return;
-    };
-    let Ok(mut h) = Coleco::new(Firmware::Hle, cart) else {
-        return;
-    };
+fn run_title(bios: &[u8], cart: &[u8], title: &str, slot: u16, target: u16, show: &str, t: &mut Tally) {
+    let Ok(mut m) = Coleco::new(Coleco::bios_from_bytes(bios).unwrap(), cart) else { return };
+    let Ok(mut h) = Coleco::new(Firmware::Hle, cart) else { return };
     let mut seen = 0u32;
     let mut frame = 0u32;
     let mut was_bios = false;
@@ -219,9 +178,7 @@ fn run_title(
                 let sp0 = m.cpu.sp;
                 let ret = u16::from_le_bytes([m.bus.peek(sp0), m.bus.peek(sp0.wrapping_add(1))]);
                 let (c0, n0) = (m.cycles(), m.nmis);
-                while !(m.cpu.pc == ret && m.cpu.sp == sp0.wrapping_add(2))
-                    && m.cycles() - c0 < TIMEOUT
-                {
+                while !(m.cpu.pc == ret && m.cpu.sp == sp0.wrapping_add(2)) && m.cycles() - c0 < TIMEOUT {
                     m.step();
                 }
                 if m.cycles() - c0 >= TIMEOUT {
@@ -234,14 +191,11 @@ fn run_title(
                     h.load_state(&before).expect("state from the same build");
                     h.bus.pads = pads;
                     let hc0 = h.cycles();
-                    while !(h.cpu.pc == ret && h.cpu.sp == sp0.wrapping_add(2))
-                        && h.cycles() - hc0 < TIMEOUT
-                    {
+                    while !(h.cpu.pc == ret && h.cpu.sp == sp0.wrapping_add(2)) && h.cycles() - hc0 < TIMEOUT {
                         h.step();
                     }
                     let d = differences(&m, &h);
-                    let timing_only =
-                        |k: &String| k.starts_with("STACK") || k.starts_with("VDPSTATUS");
+                    let timing_only = |k: &String| k.starts_with("STACK") || k.starts_with("VDPSTATUS");
                     if d.is_empty() {
                         t.exact += 1;
                     }
@@ -259,18 +213,13 @@ fn run_title(
                             let kind = k.split(' ').next().unwrap_or(k).to_string();
                             *t.kinds.entry(kind).or_default() += 1;
                         }
-                        let wanted = if show.is_empty() {
-                            !d.iter().all(timing_only)
-                        } else {
-                            d.iter().any(|k| k.starts_with(show))
-                        };
+                        let wanted = if show.is_empty() { !d.iter().all(timing_only) } else { d.iter().any(|k| k.starts_with(show)) };
                         if t.examples.len() < 6 && wanted {
                             let entry = match class {
                                 Some(c) => format!("type {c} {entry}"),
                                 None => entry.clone(),
                             };
-                            t.examples
-                                .push(format!("{title} {entry}: {}", d.join("; ")));
+                            t.examples.push(format!("{title} {entry}: {}", d.join("; ")));
                         }
                     }
                 }
@@ -323,28 +272,13 @@ fn main() {
 
     let jobs = Arc::new(Mutex::new(paths));
     let tally = Arc::new(Mutex::new(Tally::default()));
-    let threads = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(4)
-        .min(16);
+    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(16);
     let handles: Vec<_> = (0..threads)
         .map(|_| {
-            let (jobs, tally, bios, root, show) = (
-                jobs.clone(),
-                tally.clone(),
-                bios.clone(),
-                root.clone(),
-                show.clone(),
-            );
+            let (jobs, tally, bios, root, show) = (jobs.clone(), tally.clone(), bios.clone(), root.clone(), show.clone());
             std::thread::spawn(move || loop {
-                let Some(p) = jobs.lock().unwrap().pop() else {
-                    break;
-                };
-                let file = p
-                    .strip_prefix(&root)
-                    .unwrap_or(&p)
-                    .to_string_lossy()
-                    .replace('\\', "/");
+                let Some(p) = jobs.lock().unwrap().pop() else { break };
+                let file = p.strip_prefix(&root).unwrap_or(&p).to_string_lossy().replace('\\', "/");
                 let (_, _, title) = corpus::classify(&file);
                 let cart = std::fs::read(&p).unwrap_or_default();
                 let mut t = Tally::default();
@@ -382,39 +316,24 @@ fn main() {
         "  {} samples, {} exact ({:.1}%), {} set aside for an NMI, {} timed out",
         t.samples,
         t.exact,
-        if t.samples == 0 {
-            0.0
-        } else {
-            t.exact as f64 * 100.0 / t.samples as f64
-        },
+        if t.samples == 0 { 0.0 } else { t.exact as f64 * 100.0 / t.samples as f64 },
         t.nmi_skipped,
         t.timeouts
     );
     println!(
         "  {} clean ({:.1}%): exact but for stack left-overs and timing-set VDP status",
         t.clean,
-        if t.samples == 0 {
-            0.0
-        } else {
-            t.clean as f64 * 100.0 / t.samples as f64
-        }
+        if t.samples == 0 { 0.0 } else { t.clean as f64 * 100.0 / t.samples as f64 }
     );
     if t.samples > 0 {
-        println!(
-            "  real routine: {} cycles per call on average",
-            t.real_cycles / t.samples
-        );
+        println!("  real routine: {} cycles per call on average", t.real_cycles / t.samples);
     }
     for (k, v) in &t.kinds {
         println!("  differs in {k:<6} {v}");
     }
     for (c, (n, clean, titles)) in &t.classes {
         let names: Vec<&str> = titles.iter().map(String::as_str).collect();
-        println!(
-            "  object type {c}: {clean}/{n} clean, {} titles: {}",
-            titles.len(),
-            names.join("; ")
-        );
+        println!("  object type {c}: {clean}/{n} clean, {} titles: {}", titles.len(), names.join("; "));
     }
     for e in &t.examples {
         println!("  e.g. {e}");

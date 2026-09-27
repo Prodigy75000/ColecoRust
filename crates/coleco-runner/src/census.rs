@@ -48,11 +48,7 @@ struct Title {
 }
 
 fn run(bios: &[u8], path: &Path, root: &Path) -> Option<Title> {
-    let file = path
-        .strip_prefix(root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .replace('\\', "/");
+    let file = path.strip_prefix(root).unwrap_or(path).to_string_lossy().replace('\\', "/");
     let (class, _, title) = corpus::classify(&file);
     let cart = std::fs::read(path).ok()?;
     let mut m = Coleco::new(Coleco::bios_from_bytes(bios).ok()?, &cart).ok()?;
@@ -63,13 +59,7 @@ fn run(bios: &[u8], path: &Path, root: &Path) -> Option<Title> {
         m.take_audio();
     }
     let probe = *m.bus.probe.take()?;
-    Some(Title {
-        title,
-        class,
-        file,
-        crc: png::crc32(&cart),
-        probe,
-    })
+    Some(Title { title, class, file, crc: png::crc32(&cart), probe })
 }
 
 fn ranges(addrs: impl Iterator<Item = u16>) -> String {
@@ -79,22 +69,14 @@ fn ranges(addrs: impl Iterator<Item = u16>) -> String {
         run = match run {
             Some((s, e)) if a == e + 1 => Some((s, a)),
             Some((s, e)) => {
-                out.push(if s == e {
-                    format!("{s:04X}")
-                } else {
-                    format!("{s:04X}-{e:04X}")
-                });
+                out.push(if s == e { format!("{s:04X}") } else { format!("{s:04X}-{e:04X}") });
                 Some((a, a))
             }
             None => Some((a, a)),
         };
     }
     if let Some((s, e)) = run {
-        out.push(if s == e {
-            format!("{s:04X}")
-        } else {
-            format!("{s:04X}-{e:04X}")
-        });
+        out.push(if s == e { format!("{s:04X}") } else { format!("{s:04X}-{e:04X}") });
     }
     out.join(",")
 }
@@ -123,18 +105,12 @@ fn main() {
 
     let jobs = Arc::new(Mutex::new(paths));
     let results = Arc::new(Mutex::new(Vec::new()));
-    let threads = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(4)
-        .min(16);
+    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(16);
     let handles: Vec<_> = (0..threads)
         .map(|_| {
-            let (jobs, results, bios, root) =
-                (jobs.clone(), results.clone(), bios.clone(), root.clone());
+            let (jobs, results, bios, root) = (jobs.clone(), results.clone(), bios.clone(), root.clone());
             std::thread::spawn(move || loop {
-                let Some(p) = jobs.lock().unwrap().pop() else {
-                    break;
-                };
+                let Some(p) = jobs.lock().unwrap().pop() else { break };
                 if let Some(t) = run(&bios, &p, &root) {
                     results.lock().unwrap().push(t);
                 }
@@ -178,21 +154,10 @@ fn main() {
         }
     }
     let mut ranked: Vec<(&u16, &Agg)> = entries.iter().collect();
-    ranked.sort_by(|a, b| {
-        (b.1.commercial + b.1.pd, b.1.calls)
-            .cmp(&(a.1.commercial + a.1.pd, a.1.calls))
-            .then(a.0.cmp(b.0))
-    });
-    let mut tsv = String::from(
-        "rank\tentry\ttitles_commercial\ttitles_pd\tcalls\tsample_callers\tsample_titles\n",
-    );
+    ranked.sort_by(|a, b| (b.1.commercial + b.1.pd, b.1.calls).cmp(&(a.1.commercial + a.1.pd, a.1.calls)).then(a.0.cmp(b.0)));
+    let mut tsv = String::from("rank\tentry\ttitles_commercial\ttitles_pd\tcalls\tsample_callers\tsample_titles\n");
     for (i, (addr, a)) in ranked.iter().enumerate() {
-        let callers: Vec<String> = a
-            .callers
-            .iter()
-            .take(6)
-            .map(|c| format!("{c:04X}"))
-            .collect();
+        let callers: Vec<String> = a.callers.iter().take(6).map(|c| format!("{c:04X}")).collect();
         tsv.push_str(&format!(
             "{}\t{:04X}\t{}\t{}\t{}\t{}\t{}\n",
             i + 1,
@@ -213,11 +178,7 @@ fn main() {
     for t in &titles {
         let p = &t.probe;
         let total = p.cycles_bios + p.cycles_other;
-        let pct = if total == 0 {
-            0.0
-        } else {
-            p.cycles_bios as f64 * 100.0 / total as f64
-        };
+        let pct = if total == 0 { 0.0 } else { p.cycles_bios as f64 * 100.0 / total as f64 };
         let list: Vec<String> = p.entries.keys().map(|a| format!("{a:04X}")).collect();
         tsv.push_str(&format!(
             "{}\t{}\t{}\t{:08x}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.1}\n",
@@ -259,13 +220,7 @@ fn main() {
     let mut tsv = String::from("address\ttitles_boot\ttitles_live\thandover_values\n");
     for (off, r) in &ram {
         let vals: Vec<String> = r.values.iter().map(|v| format!("{v:02X}")).collect();
-        tsv.push_str(&format!(
-            "{:04X}\t{}\t{}\t{}\n",
-            0x7000 + off,
-            r.boot,
-            r.live,
-            vals.join(",")
-        ));
+        tsv.push_str(&format!("{:04X}\t{}\t{}\t{}\n", 0x7000 + off, r.boot, r.live, vals.join(",")));
     }
     std::fs::write(format!("{out}/census-ram.tsv"), tsv).expect("write");
 
@@ -307,10 +262,7 @@ fn main() {
     let mut tsv = String::from("address\tkind\ttitles\treturns\tsample_titles\n");
     for (a, (n, calls, ts)) in &rets {
         let kind = if resume(*a) { "resume" } else { "odd" };
-        tsv.push_str(&format!(
-            "{a:04X}\t{kind}\t{n}\t{calls}\t{}\n",
-            ts.join("; ")
-        ));
+        tsv.push_str(&format!("{a:04X}\t{kind}\t{n}\t{calls}\t{}\n", ts.join("; ")));
     }
     std::fs::write(format!("{out}/census-returns.tsv"), tsv).expect("write");
     let odd: Vec<String> = rets
@@ -321,11 +273,7 @@ fn main() {
 
     // ---- summary and coverage ----
     let commercial: Vec<&Title> = titles.iter().filter(|t| t.class == "commercial").collect();
-    println!(
-        "{} titles ({} commercial) under {dir}",
-        titles.len(),
-        commercial.len()
-    );
+    println!("{} titles ({} commercial) under {dir}", titles.len(), commercial.len());
     println!("{} distinct BIOS entry points used", entries.len());
     println!(
         "returns into the BIOS: {} addresses, {} not after a CALL/RST in the real BIOS: {}",
@@ -333,50 +281,29 @@ fn main() {
         odd.len(),
         odd.join(", ")
     );
-    let no_calls = commercial
-        .iter()
-        .filter(|t| t.probe.entries.is_empty())
-        .count();
+    let no_calls = commercial.iter().filter(|t| t.probe.entries.is_empty()).count();
     println!("commercial titles calling nothing after boot: {no_calls}");
-    let data_titles = commercial
-        .iter()
-        .filter(|t| !t.probe.data_reads.is_empty())
-        .count();
+    let data_titles = commercial.iter().filter(|t| !t.probe.data_reads.is_empty()).count();
     println!("commercial titles reading BIOS bytes as data: {data_titles}");
-    let boot_nonzero = ram
-        .values()
-        .filter(|r| r.boot > 0 && r.values.iter().any(|&v| v != 0))
-        .count();
+    let boot_nonzero = ram.values().filter(|r| r.boot > 0 && r.values.iter().any(|&v| v != 0)).count();
     println!(
         "RAM read as the boot left it: {} bytes, {} of them non-zero at hand-over in some title",
         ram.values().filter(|r| r.boot > 0).count(),
         boot_nonzero
     );
-    println!(
-        "RAM read as a BIOS routine left it during play: {} bytes",
-        ram.values().filter(|r| r.live > 0).count()
-    );
+    println!("RAM read as a BIOS routine left it during play: {} bytes", ram.values().filter(|r| r.live > 0).count());
 
     println!("\ncoverage of commercial titles by the N most-used entries:");
     let order: Vec<u16> = ranked.iter().map(|(a, _)| **a).collect();
     let mut have: BTreeSet<u16> = BTreeSet::new();
     let mut last = usize::MAX;
-    for (n, a) in std::iter::once(None)
-        .chain(order.iter().map(Some))
-        .enumerate()
-    {
+    for (n, a) in std::iter::once(None).chain(order.iter().map(Some)).enumerate() {
         if let Some(a) = a {
             have.insert(*a);
         }
-        let covered = commercial
-            .iter()
-            .filter(|t| t.probe.entries.keys().all(|e| have.contains(e)))
-            .count();
+        let covered = commercial.iter().filter(|t| t.probe.entries.keys().all(|e| have.contains(e))).count();
         if covered != last && (n <= 40 || covered == commercial.len()) {
-            println!(
-                "  {n:>3} entries -> {covered:>3} / {} titles",
-                commercial.len()
-            );
+            println!("  {n:>3} entries -> {covered:>3} / {} titles", commercial.len());
             last = covered;
         }
     }

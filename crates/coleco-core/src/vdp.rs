@@ -45,8 +45,8 @@ const SPRITE_END: u8 = 0xd0;
 /// through the standard Y'PbPr to RGB matrix. Colour 0 is transparent and is
 /// never looked up; black stands in for it.
 const TMS_PALETTE: [u32; 16] = [
-    0x000000, 0x000000, 0x00e80d, 0x40f350, 0x4d44ff, 0x7966ff, 0xf9452b, 0x12fcff, 0xff452d,
-    0xff6950, 0xdecb05, 0xf0d444, 0x00cb0b, 0xe446e2, 0xcccccc, 0xffffff,
+    0x000000, 0x000000, 0x00e80d, 0x40f350, 0x4d44ff, 0x7966ff, 0xf9452b, 0x12fcff,
+    0xff452d, 0xff6950, 0xdecb05, 0xf0d444, 0x00cb0b, 0xe446e2, 0xcccccc, 0xffffff,
 ];
 
 /// Which mode the registers select (TMS s2).
@@ -224,11 +224,7 @@ impl Vdp {
             // Front to back: sprites, the pattern plane, the backdrop. Colour 0
             // is transparent on every plane (TMS s4).
             let c = if spr[x] != 0 { spr[x] } else { bg[x] };
-            self.framebuffer[row + x] = if c != 0 {
-                Self::tms_colour(c)
-            } else {
-                backdrop
-            };
+            self.framebuffer[row + x] = if c != 0 { Self::tms_colour(c) } else { backdrop };
         }
     }
 
@@ -266,11 +262,7 @@ impl Vdp {
                     let n = v(names + r * 32 + (x >> 3)) as usize;
                     let bits = v(patterns + n * 8 + y);
                     let col = v(colours + (n >> 3));
-                    out[x] = if bits & (0x80 >> (x & 7)) != 0 {
-                        col >> 4
-                    } else {
-                        col & 15
-                    };
+                    out[x] = if bits & (0x80 >> (x & 7)) != 0 { col >> 4 } else { col & 15 };
                 }
             }
             TmsMode::Graphics2 => {
@@ -280,11 +272,7 @@ impl Vdp {
                     let (pa, ca) = self.g2_addresses(third, n, y);
                     let bits = v(pa);
                     let col = v(ca);
-                    out[x] = if bits & (0x80 >> (x & 7)) != 0 {
-                        col >> 4
-                    } else {
-                        col & 15
-                    };
+                    out[x] = if bits & (0x80 >> (x & 7)) != 0 { col >> 4 } else { col & 15 };
                 }
             }
             TmsMode::Multicolor => {
@@ -329,11 +317,7 @@ impl Vdp {
             }
             // Drawn from Y+1, and values past the terminator are the -31..-1
             // that let a sprite slide in from the top (TMS s5).
-            let top = if yb > 0xd0 {
-                yb as i32 - 256
-            } else {
-                yb as i32
-            } + 1;
+            let top = if yb > 0xd0 { yb as i32 - 256 } else { yb as i32 } + 1;
             let l = line as i32;
             if l < top || l >= top + h {
                 continue;
@@ -355,11 +339,7 @@ impl Vdp {
         for &i in &on_line[..n] {
             let e = sat + i * 4;
             let yb = self.vram[e];
-            let top = if yb > 0xd0 {
-                yb as i32 - 256
-            } else {
-                yb as i32
-            } + 1;
+            let top = if yb > 0xd0 { yb as i32 - 256 } else { yb as i32 } + 1;
             let mut x = self.vram[e + 1] as i32;
             let mut name = self.vram[e + 2] as usize;
             let attr = self.vram[e + 3];
@@ -591,21 +571,9 @@ mod tests {
         }
         v.vram[0x3f00 + 20] = 0xd0;
         v.render_line(10);
-        assert_eq!(
-            v.read_control() & 0x5f,
-            0x40 | 4,
-            "5S, and sprite 4 was fifth"
-        );
-        assert_eq!(
-            v.framebuffer[10 * WIDTH + 60],
-            Vdp::tms_colour(6),
-            "sprite 3 drawn"
-        );
-        assert_eq!(
-            v.framebuffer[10 * WIDTH + 80],
-            Vdp::tms_colour(0),
-            "sprite 4 is not"
-        );
+        assert_eq!(v.read_control() & 0x5f, 0x40 | 4, "5S, and sprite 4 was fifth");
+        assert_eq!(v.framebuffer[10 * WIDTH + 60], Vdp::tms_colour(6), "sprite 3 drawn");
+        assert_eq!(v.framebuffer[10 * WIDTH + 80], Vdp::tms_colour(0), "sprite 4 is not");
     }
 
     #[test]

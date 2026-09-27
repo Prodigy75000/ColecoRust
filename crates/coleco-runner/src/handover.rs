@@ -42,10 +42,7 @@ fn snapshot(m: &Coleco) -> Vec<(String, String)> {
     }
     let vram = &m.bus.vdp.vram[..];
     v.push(("vram crc".into(), format!("{:08X}", png::crc32(vram))));
-    v.push((
-        "vram nonzero".into(),
-        format!("{}", vram.iter().filter(|&&b| b != 0).count()),
-    ));
+    v.push(("vram nonzero".into(), format!("{}", vram.iter().filter(|&&b| b != 0).count())));
     for (i, &b) in m.bus.ram.iter().enumerate() {
         v.push((format!("ram {:04X}", 0x7000 + i), format!("{b:02X}")));
     }
@@ -73,20 +70,14 @@ fn main() {
     let mut seen: BTreeMap<&str, BTreeMap<String, BTreeMap<String, usize>>> = BTreeMap::new();
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
     for p in corpus::cartridges(&root) {
-        let file = p
-            .strip_prefix(&root)
-            .unwrap_or(&p)
-            .to_string_lossy()
-            .replace('\\', "/");
+        let file = p.strip_prefix(&root).unwrap_or(&p).to_string_lossy().replace('\\', "/");
         let (_, dump, _) = corpus::classify(&file);
         if dump == "bad" {
             continue;
         }
         let cart = std::fs::read(&p).expect("read cart");
         let kind = corpus::header(&cart);
-        let Ok(mut m) = Coleco::new(Coleco::bios_from_bytes(&bios).unwrap(), &cart) else {
-            continue;
-        };
+        let Ok(mut m) = Coleco::new(Coleco::bios_from_bytes(&bios).unwrap(), &cart) else { continue };
         // Up to 30 s: past the title delay with margin.
         let mut steps = 0u64;
         while m.cpu.pc < 0x8000 && steps < 40_000_000 {
@@ -120,35 +111,16 @@ fn main() {
                     println!("  {field:<13} always {v}");
                 }
             } else if is_ram {
-                let vs: Vec<String> = values
-                    .iter()
-                    .take(6)
-                    .map(|(v, c)| format!("{v}x{c}"))
-                    .collect();
+                let vs: Vec<String> = values.iter().take(6).map(|(v, c)| format!("{v}x{c}")).collect();
                 ram_varies.push(format!("{}[{}]", &field[4..], vs.join(" ")));
             } else {
                 let mut vs: Vec<(&String, &usize)> = values.iter().collect();
                 vs.sort_by(|a, b| b.1.cmp(a.1));
-                let shown: Vec<String> = vs
-                    .iter()
-                    .take(4)
-                    .map(|(v, c)| format!("{v} x{c}"))
-                    .collect();
-                println!(
-                    "  {field:<13} VARIES ({} values): {}",
-                    values.len(),
-                    shown.join(", ")
-                );
+                let shown: Vec<String> = vs.iter().take(4).map(|(v, c)| format!("{v} x{c}")).collect();
+                println!("  {field:<13} VARIES ({} values): {}", values.len(), shown.join(", "));
             }
         }
-        println!(
-            "  RAM identical and non-zero in every title: {}",
-            ram_same_nonzero.join(" ")
-        );
-        println!(
-            "  RAM varying between titles: {} bytes: {}",
-            ram_varies.len(),
-            ram_varies.join(" ")
-        );
+        println!("  RAM identical and non-zero in every title: {}", ram_same_nonzero.join(" "));
+        println!("  RAM varying between titles: {} bytes: {}", ram_varies.len(), ram_varies.join(" "));
     }
 }
