@@ -62,7 +62,15 @@ fn set_bc(cpu: &mut Z80, b: u8, c: u8) {
     cpu.set_bc(u16::from_be_bytes([b, c]));
 }
 
-fn ram16(bus: &mut ColecoBus, addr: u16) -> u16 {
+/// What a routine did: finished, so the trap returns to its caller; or
+/// handed control to game code, the PC and stack already set, as the sound
+/// driver does for a game's special sound routines.
+pub enum Flow {
+    Ret(i32),
+    Jump(i32),
+}
+
+pub(super) fn ram16(bus: &mut ColecoBus, addr: u16) -> u16 {
     let lo = bus.peek(addr);
     let hi = bus.peek(addr.wrapping_add(1));
     u16::from_le_bytes([lo, hi])
@@ -83,10 +91,19 @@ fn mode2(bus: &ColecoBus) -> bool {
     bus.ram[0x3c3] & 0x02 != 0
 }
 
-/// Run the routine at `target`, if it is written. `Some(cycles)` when it ran
-/// (the caller then performs the RET), `None` when it is not written yet.
-pub fn call(target: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<i32> {
-    Some(match target {
+/// Run the routine at `target`, if it is written. `None` when it is not
+/// written yet.
+pub fn call(target: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
+    use super::sound;
+    match target {
+        0x025e => return Some(sound::play_it(cpu, bus)),
+        0x027f => return Some(sound::sound_man(cpu, bus)),
+        _ => {}
+    }
+    Some(Flow::Ret(match target {
+        0x0213 => sound::sound_init(cpu, bus),
+        0x023b => sound::turn_off_sound(cpu, bus),
+        0x0300 => sound::play_songs(cpu, bus),
         0x1cca => write_register(cpu, bus),
         0x1d57 => read_register(cpu, bus),
         0x1d01 => write_vram(cpu, bus),
@@ -105,7 +122,7 @@ pub fn call(target: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<i32> {
         0x118b => decoder(cpu, bus),
         0x11c1 => poller(cpu, bus),
         _ => return None,
-    })
+    }))
 }
 
 /// READ_REGISTER (`$1FDC`): A := VDP status. Reading it clears the frame
@@ -499,7 +516,7 @@ fn decoder(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
 }
 
 /// Flags as `AND n` leaves them: S, Z, bits 5 and 3, parity, H set.
-fn and_flags(result: u8) -> u8 {
+pub(super) fn and_flags(result: u8) -> u8 {
     sz53p(result) | 0x10
 }
 

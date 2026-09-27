@@ -3,7 +3,9 @@
 
 //! `routinediff`: one HLE routine against the real one, on real calls.
 //!
-//!   routinediff --bios bios/coleco.rom --routine 1FD9 dumps/corpus
+//!   routinediff --bios bios/coleco.rom --routine 1FD9 [--show KIND] dumps/corpus
+//!
+//! `--show RAM` (or any difference kind) lists only examples with that kind.
 //!
 //! Every title (one dump each) runs on the REAL BIOS under the smoke script.
 //! Whenever cartridge code reaches the routine (its jump-table slot, or the
@@ -74,14 +76,12 @@ fn differences(real: &Coleco, hle: &Coleco) -> Vec<String> {
         d.push(format!("STACK x{}", stack.len()));
     }
     if !ram.is_empty() {
-        let first = ram[0];
-        d.push(format!(
-            "RAM x{} first {:04X} {:02X}/{:02X}",
-            ram.len(),
-            0x7000 + first,
-            real.bus.ram[first],
-            hle.bus.ram[first]
-        ));
+        let shown: Vec<String> = ram
+            .iter()
+            .take(8)
+            .map(|&i| format!("{:04X} {:02X}/{:02X}", 0x7000 + i, real.bus.ram[i], hle.bus.ram[i]))
+            .collect();
+        d.push(format!("RAM x{} {}", ram.len(), shown.join(" ")));
     }
     let (rv, hv) = (&real.bus.vdp.vram, &hle.bus.vdp.vram);
     let vram: Vec<usize> = (0..rv.len()).filter(|&i| rv[i] != hv[i]).collect();
@@ -128,7 +128,7 @@ struct Tally {
     examples: Vec<String>,
 }
 
-fn run_title(bios: &[u8], cart: &[u8], title: &str, slot: u16, target: u16, t: &mut Tally) {
+fn run_title(bios: &[u8], cart: &[u8], title: &str, slot: u16, target: u16, show: &str, t: &mut Tally) {
     let Ok(mut m) = Coleco::new(Coleco::bios_from_bytes(bios).unwrap(), cart) else { return };
     let Ok(mut h) = Coleco::new(Firmware::Hle, cart) else { return };
     let mut seen = 0u32;
@@ -184,7 +184,8 @@ fn run_title(bios: &[u8], cart: &[u8], title: &str, slot: u16, target: u16, t: &
                             let kind = k.split(' ').next().unwrap_or(k).to_string();
                             *t.kinds.entry(kind).or_default() += 1;
                         }
-                        if t.examples.len() < 6 && !d.iter().all(timing_only) {
+                        let wanted = if show.is_empty() { !d.iter().all(timing_only) } else { d.iter().any(|k| k.starts_with(show)) };
+                        if t.examples.len() < 6 && wanted {
                             t.examples.push(format!("{title} {entry}: {}", d.join("; ")));
                         }
                     }
@@ -203,12 +204,14 @@ fn run_title(bios: &[u8], cart: &[u8], title: &str, slot: u16, target: u16, t: &
 fn main() {
     let mut bios_path: Option<String> = None;
     let mut routine: Option<u16> = None;
+    let mut show = String::new();
     let mut dir: Option<String> = None;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--bios" => bios_path = args.next(),
             "--routine" => routine = args.next().and_then(|v| u16::from_str_radix(&v, 16).ok()),
+            "--show" => show = args.next().unwrap_or_default(),
             _ => dir = Some(a),
         }
     }
@@ -239,14 +242,14 @@ fn main() {
     let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(16);
     let handles: Vec<_> = (0..threads)
         .map(|_| {
-            let (jobs, tally, bios, root) = (jobs.clone(), tally.clone(), bios.clone(), root.clone());
+            let (jobs, tally, bios, root, show) = (jobs.clone(), tally.clone(), bios.clone(), root.clone(), show.clone());
             std::thread::spawn(move || loop {
                 let Some(p) = jobs.lock().unwrap().pop() else { break };
                 let file = p.strip_prefix(&root).unwrap_or(&p).to_string_lossy().replace('\\', "/");
                 let (_, _, title) = corpus::classify(&file);
                 let cart = std::fs::read(&p).unwrap_or_default();
                 let mut t = Tally::default();
-                run_title(&bios, &cart, &title, slot, target, &mut t);
+                run_title(&bios, &cart, &title, slot, target, &show, &mut t);
                 let mut all = tally.lock().unwrap();
                 all.samples += t.samples;
                 all.exact += t.exact;

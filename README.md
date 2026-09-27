@@ -10,8 +10,8 @@ no third-party emulator code. It does reuse the owner's own in-house cores:
 the Z80 is MegaRust's, and the VDP and PSG are adapted from MegaRust's. Each
 such file says where it came from and at which commit.
 
-Started 2026-09-27. On the REAL BIOS, Donkey Kong boots through the title screen
-to gameplay with sound. The HLE, which is the point, does not exist yet.
+Started 2026-09-27. With NO BIOS file, on ColecoRust's own HLE BIOS, 132 of the
+collection's 164 commercial titles reach gameplay (151 on the real BIOS).
 
 ## The point of this core is the HLE BIOS
 
@@ -100,7 +100,7 @@ is the right one here, but it needs a rule or it becomes an opinion:
 | SN76489 | adapted from MegaRust to TI's SN76489AN (15-bit noise register); 44.1 kHz mono |
 | Controllers and keypad | joystick and keypad modes; all twelve keypad codes checked against the real BIOS decoding table (`*` and `#` were swapped, fixed) |
 | Mapper / bank switching | not started |
-| HLE BIOS | image, own font, hand-over boot, and 17 routines (VDP registers and VRAM, tables, sprites, font, RNG, MODE_1, controllers and keypad), each clean on 100% of the corpus calls `routinediff` samples against the real BIOS. 95 of 164 commercial titles ALIVE with no BIOS file (151 on the real BIOS); `ledger/smoke-hle.tsv` |
+| HLE BIOS | image, own font, hand-over boot, and 22 routines: VDP registers and VRAM, tables, sprites, font, RNG, MODE_1, controllers and keypad, and the sound driver (including game-supplied special sounds, which call back into the cartridge). **132 of 164 commercial titles ALIVE with no BIOS file** (151 on the real BIOS); `ledger/smoke-hle.tsv` |
 | Save states | v1 layout, fixed size, round-trip tested |
 | libretro | not started |
 | Corpus smoke, REAL BIOS | 151 of 164 commercial titles and 42 of 48 PD titles ALIVE, 0 crashed; `ledger/smoke-real-bios.tsv`, `cargo run --release -p coleco-runner --bin smoke` |

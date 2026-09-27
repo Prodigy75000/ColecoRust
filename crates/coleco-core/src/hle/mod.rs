@@ -30,6 +30,7 @@
 
 pub mod font;
 pub mod routines;
+pub mod sound;
 
 use crate::machine::ColecoBus;
 use crate::z80::{Bus, Z80};
@@ -93,6 +94,9 @@ pub fn image() -> Box<[u8; BIOS_SIZE]> {
         let at = font::BASE as usize + (c - font::FIRST) as usize * 8;
         b[at..at + 8].copy_from_slice(&font::pattern(c));
     }
+    // The sound driver's idle-channel marker: channels with nothing to play
+    // point here, and the driver reads its first byte as "idle".
+    b[sound::IDLE as usize] = 0xff;
     for &(slot, target) in &TABLE {
         let s = slot as usize;
         b[s..s + 3].copy_from_slice(&[0xc3, target as u8, (target >> 8) as u8]);
@@ -137,12 +141,18 @@ pub fn trap(cpu: &mut Z80, bus: &mut ColecoBus, log: &mut HleLog) -> Option<i32>
     if runs_from_image(pc) {
         return None;
     }
-    let known = TABLE.iter().any(|&(_, t)| t == pc);
-    if known {
-        if let Some(c) = routines::call(pc, cpu, bus) {
-            return Some(c + ret(cpu, bus));
-        }
+    // Game code returning into the sound driver after a special sound.
+    let flow = match sound::resume(pc, cpu, bus) {
+        Some(flow) => Some(flow),
+        None if TABLE.iter().any(|&(_, t)| t == pc) => routines::call(pc, cpu, bus),
+        None => None,
+    };
+    match flow {
+        Some(routines::Flow::Ret(c)) => return Some(c + ret(cpu, bus)),
+        Some(routines::Flow::Jump(c)) => return Some(c),
+        None => {}
     }
+    let known = TABLE.iter().any(|&(_, t)| t == pc);
     // Not written yet, or not a routine at all: logged, and it returns.
     if known {
         *log.unimplemented.entry(pc).or_default() += 1;
