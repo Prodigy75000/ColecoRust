@@ -33,6 +33,12 @@ path = "src/handover.rs"
 name = "routinediff"
 path = "src/routinediff.rs"
 
+# One title on the real BIOS and the HLE side by side, to the first frame they
+# disagree, with the calls of that frame.
+[[bin]]
+name = "lockstep"
+path = "src/lockstep.rs"
+
 # Z80 conformance: ZEXDOC then ZEXALL, on a minimal test bus. Lifted from
 # MegaRust with the CPU.
 [[bin]]

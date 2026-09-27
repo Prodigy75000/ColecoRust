@@ -16,7 +16,11 @@
 //! VRAM as it stands at the end. `--probe` attaches the census probe and
 //! prints the BIOS entries it saw, with their callers, and the data reads.
 //! `--state FILE` starts from a save state (a device's `.state` is one) after
-//! building the machine on the same cartridge and BIOS mode.
+//! building the machine on the same cartridge and BIOS mode. `--save-state
+//! FILE` writes one at the end, so a real-BIOS run stopped with `--until-cart`
+//! can be continued on the HLE from the very same machine. `--trace-vdp`
+//! prints every change to a VDP register as it happens, with the frame, the
+//! instruction's address and whether an NMI handler was running.
 
 use coleco_core::machine::{Coleco, Firmware, Pad};
 use coleco_core::vdp::{HEIGHT, WIDTH};
@@ -27,7 +31,7 @@ mod png;
 use png::write_png;
 
 fn usage() -> ! {
-    eprintln!("usage: coleco [--bios PATH] [--frames N] [--png OUT] [--key FRAME:K]... [--fire FRAME]... [--until-cart] [--vram OUT] [--probe] [--state FILE] CART");
+    eprintln!("usage: coleco [--bios PATH] [--frames N] [--png OUT] [--key FRAME:K]... [--fire FRAME]... [--until-cart] [--vram OUT] [--probe] [--state FILE] [--save-state FILE] [--trace-vdp] CART");
     eprintln!();
     eprintln!("Runs CART for N frames (default 60) on the real BIOS at PATH, or on");
     eprintln!("the HLE when no --bios is given, and optionally writes the last frame.");
@@ -45,6 +49,8 @@ fn main() {
     let mut probe = false;
     let mut state: Option<String> = None;
     let mut vram_out: Option<String> = None;
+    let mut save_to: Option<String> = None;
+    let mut trace_vdp = false;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -54,6 +60,8 @@ fn main() {
             "--until-cart" => until_cart = true,
             "--probe" => probe = true,
             "--state" => state = Some(args.next().unwrap_or_else(|| usage())),
+            "--trace-vdp" => trace_vdp = true,
+            "--save-state" => save_to = Some(args.next().unwrap_or_else(|| usage())),
             "--vram" => vram_out = Some(args.next().unwrap_or_else(|| usage())),
             "--key" => keys.push(parse_key(&args.next().unwrap_or_else(|| usage()))),
             "--fire" => fires.push(args.next().and_then(|v| v.parse().ok()).unwrap_or_else(|| usage())),
@@ -111,7 +119,26 @@ fn main() {
         let key = keys.iter().find(|&&(at, _)| f >= at && f < at + 10).map(|&(_, k)| k);
         let fire = fires.iter().any(|&at| f >= at && f < at + 10);
         m.bus.pads[0] = Pad { key, fire_left: fire, fire_right: fire, ..Pad::default() };
-        m.run_frame();
+        if !trace_vdp {
+            m.run_frame();
+            continue;
+        }
+        // Step to the frame's end, watching the registers.
+        loop {
+            let (before, pc, nmis) = (m.bus.vdp.regs, m.cpu.pc, m.nmis);
+            m.step();
+            if m.bus.vdp.regs != before {
+                for r in 0..8 {
+                    if m.bus.vdp.regs[r] != before[r] {
+                        let nmi = if m.nmis != nmis { " (NMI taken)" } else { "" };
+                        println!("  vdp      frame {f} R{r} {:02X} -> {:02X} at {pc:04X}{nmi}", before[r], m.bus.vdp.regs[r]);
+                    }
+                }
+            }
+            if !m.in_line() && m.bus.vdp.line == 0 {
+                break;
+            }
+        }
     }
     let audio = m.take_audio();
     let peak = audio.iter().map(|s| s.unsigned_abs()).max().unwrap_or(0);
@@ -145,6 +172,10 @@ fn main() {
         }
     }
 
+    if let Some(out) = save_to {
+        std::fs::write(&out, m.save_state()).expect("write state");
+        println!("  wrote    {out} (save state)");
+    }
     if let Some(out) = vram_out {
         std::fs::write(&out, &m.bus.vdp.vram[..]).expect("write vram");
         println!("  wrote    {out} (VRAM)");

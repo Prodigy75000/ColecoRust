@@ -134,6 +134,7 @@ struct Tally {
     nmi_skipped: u64,
     timeouts: u64,
     real_cycles: u64,
+    hle_cycles: u64,
     /// Difference kind (the label up to its first space) to count.
     kinds: BTreeMap<String, u64>,
     examples: Vec<String>,
@@ -219,6 +220,7 @@ fn run_title(
                     while !(h.cpu.pc == ret && h.cpu.sp == sp0.wrapping_add(2)) && h.cycles() - hc0 < TIMEOUT {
                         h.step();
                     }
+                    t.hle_cycles += h.cycles() - hc0;
                     let d = differences(&m, &h);
                     let timing_only = |k: &String| k.starts_with("STACK") || k.starts_with("VDPSTATUS");
                     if d.is_empty() {
@@ -330,6 +332,7 @@ fn main() {
                     all.nmi_skipped += t.nmi_skipped;
                     all.timeouts += t.timeouts;
                     all.real_cycles += t.real_cycles;
+                    all.hle_cycles += t.hle_cycles;
                     for (k, v) in t.kinds {
                         *all.kinds.entry(k).or_default() += v;
                     }
@@ -369,7 +372,11 @@ fn main() {
             if t.samples == 0 { 0.0 } else { t.clean as f64 * 100.0 / t.samples as f64 }
         );
         if t.samples > 0 {
-            println!("  real routine: {} cycles per call on average", t.real_cycles / t.samples);
+            println!(
+                "  real routine: {} cycles per call on average, the HLE {}",
+                t.real_cycles / t.samples,
+                t.hle_cycles / t.samples
+            );
         }
         for (k, v) in &t.kinds {
             println!("  differs in {k:<6} {v}");
