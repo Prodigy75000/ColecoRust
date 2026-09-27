@@ -121,9 +121,12 @@ impl Side {
             let entry = regs(&self.m);
             let (frame, in_nmi) = (self.frame, self.in_nmi.is_some());
             let mut guard = 0u64;
-            // Back when the return address is popped and the CPU is in the
-            // cartridge: P entries return past the words after their CALL.
-            while !(self.m.cpu.sp == sp.wrapping_add(2) && self.m.cpu.pc >= 0x8000) && guard < 20_000_000 {
+            // Back when the return address is popped and the CPU is there;
+            // a P entry returns past the words after its CALL, so for those
+            // anywhere in the cartridge will do.
+            let p_entry = coleco_core::hle::pvariant::is_entry(to);
+            let back = |m: &Coleco| m.cpu.sp == sp.wrapping_add(2) && if p_entry { m.cpu.pc >= 0x8000 } else { m.cpu.pc == ret };
+            while !back(&self.m) && guard < 20_000_000 {
                 self.step(keys);
                 guard += 1;
             }

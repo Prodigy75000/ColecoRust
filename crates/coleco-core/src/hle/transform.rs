@@ -51,17 +51,20 @@ impl Kind {
         })
     }
 
-    /// The real routine's time per item beyond the VRAM calls, cycles:
-    /// bit by bit on a Z80 is slow, and a game that paces itself on these
-    /// (BC's Quest II draws its screens with them) runs ahead of the display
-    /// if they come back early. Fitted so the HLE's average per call matches
-    /// the real one's over every corpus call (`routinediff` prints both).
+    /// The real routine's time per item beyond its VRAM calls, T-states:
+    /// the step's setup (LD HL,(nn), LD BC,8, PUSH HL, POP DE, ADD HL,BC,
+    /// EX DE,HL), the CALL of its helper and the helper itself ($1F00 bit by
+    /// bit, $1F4E byte by byte, $1F12 through the carry, $1EAB doubling),
+    /// and the step's end (EXX, INC HL, and JR or JP back). Bit by bit on a
+    /// Z80 is slow, and a game pacing itself on these (BC's Quest II draws
+    /// its screens with them) runs ahead of the display if they come back
+    /// early.
     fn cost(self) -> i32 {
         match self {
-            Kind::Vertical => 3300,
-            Kind::Horizontal => 1900,
-            Kind::Rotate => 4100,
-            Kind::Enlarge => 5200,
+            Kind::Vertical => 62 + 17 + 1903 + 4 + 6 + 12,
+            Kind::Horizontal => 62 + 17 + 438 + 4 + 6 + 12,
+            Kind::Rotate => 62 + 17 + 2642 + 4 + 6 + 10,
+            Kind::Enlarge => 62 + 17 + 4409 + 4 + 24 + 10,
         }
     }
 
@@ -94,7 +97,7 @@ fn vram(
     cpu.set_de(index);
     cpu.set_hl(at);
     cpu.iy = count;
-    routine(cpu, bus) + 60
+    routine(cpu, bus)
 }
 
 /// A nibble with every bit doubled: `abcd` to `aabbccdd`.
@@ -120,8 +123,18 @@ pub fn transform(cpu: &mut Z80, bus: &mut ColecoBus, kind: Kind) -> Flow {
     let out = buf.wrapping_add(8);
     let at = |i: u16| buf.wrapping_add(i);
     let colours = table == 3 && mode2(bus);
-    let mut c = 100;
+    // LD IX,nn, JR (not for ENLARGE, which falls through), EXX, EX AF,AF',
+    // PUSH IX.
+    let mut c = 14 + if kind == Kind::Enlarge { 0 } else { 12 } + 4 + 4 + 15;
+    // $1E5D, the colour test, with its CALL: the table first, then the mode.
+    let test = 17 + 4 + 11 + 4 + 10 + 7 + if table != 3 { 12 + 7 } else if colours { 7 + 10 + 12 + 7 + 7 } else { 7 + 10 + 12 + 12 + 7 } + 10;
+    // $1E89 and $1E9A, a colour item in or out with the calls around it.
+    let colour_call = 17 + 7 + 4 + 11 + 4 + 10 + 16 + 14 + 17 + 10 + 10;
     loop {
+        // Per item, the frame: EX AF,AF', PUSH AF, EX AF,AF', POP AF, EXX,
+        // PUSH DE, EXX, POP DE, LD IY,1, LD HL,(nn), CALL $1BA3 and its RET,
+        // POP IX, PUSH IX, JP (IX).
+        c += 4 + 11 + 4 + 10 + 4 + 11 + 4 + 10 + 14 + 16 + 17 + 10 + 14 + 15 + 8;
         c += vram(cpu, bus, get_vram, table, src, buf, 1);
         let items = match kind {
             Kind::Vertical => {
@@ -168,23 +181,33 @@ pub fn transform(cpu: &mut Z80, bus: &mut ColecoBus, kind: Kind) -> Flow {
                 4
             }
         };
+        // $1E72 (or ENLARGE's own copy of it): A from A', DE the item out,
+        // HL the buffer, LD IY, and CALL $1C27 with its RET.
+        c += if kind == Kind::Enlarge {
+            4 + 11 + 4 + 10 + 4 + 11 + 4 + 10 + 16 + 10 + 11 + 14 + 17 + 10
+        } else {
+            17 + 4 + 11 + 4 + 10 + 4 + 11 + 4 + 10 + 16 + 10 + 11 + 14 + 17 + 10 + 10
+        };
         c += vram(cpu, bus, put_vram, table, dst, out, items);
-        // The mode 2 test reads the mode through HL.
+        // The mode 2 test reads the mode through HL; then CP 1, JR NZ.
         if table == 3 {
             cpu.set_hl(0x73c3);
         }
+        c += test + 7 + if colours { 7 } else { 12 };
         if colours {
-            c += vram(cpu, bus, get_vram, 4, src, buf, 1);
+            c += colour_call + vram(cpu, bus, get_vram, 4, src, buf, 1);
             match kind {
                 Kind::Vertical | Kind::Rotate => {
-                    c += vram(cpu, bus, put_vram, 4, dst, buf, 1);
+                    c += colour_call + vram(cpu, bus, put_vram, 4, dst, buf, 1);
                 }
                 Kind::Horizontal => {
                     for i in 0..8 {
                         let v = peek(bus, at(7 - i));
                         bus.write(at(8 + i), v);
                     }
-                    c += vram(cpu, bus, put_vram, 4, dst, buf, 1);
+                    // The step's setup again and $1F4E.
+                    c += 62 + 17 + 438;
+                    c += colour_call + vram(cpu, bus, put_vram, 4, dst, buf, 1);
                 }
                 Kind::Enlarge => {
                     for i in 0..16u16 {
@@ -192,6 +215,9 @@ pub fn transform(cpu: &mut Z80, bus: &mut ColecoBus, kind: Kind) -> Flow {
                         bus.write(at(8 + 2 * i), v);
                         bus.write(at(9 + 2 * i), v);
                     }
+                    // The setup, $1EEA doubling the colours, then LD A,4 and
+                    // the same way out as the patterns.
+                    c += 62 + 17 + 1429 + 7 + 4 + 11 + 4 + 10 + 16 + 10 + 11 + 14 + 17 + 10;
                     c += vram(cpu, bus, put_vram, 4, dst, out, 4);
                 }
             }
@@ -199,11 +225,15 @@ pub fn transform(cpu: &mut Z80, bus: &mut ColecoBus, kind: Kind) -> Flow {
         src = src.wrapping_add(1);
         dst = dst.wrapping_add(items);
         left = left.wrapping_sub(1);
-        c += kind.cost();
+        // The item's own step, then INC DE, DEC BC, LD A,B, OR C, EXX, JR NZ.
+        c += kind.cost() + 6 + 6 + 4 + 4 + 4 + if left == 0 { 7 } else { 12 };
         if left == 0 {
             break;
         }
     }
+    // POP IX and RET; the exchange stub's own 58 T-states come off, as the
+    // real routine has no such stub.
+    c += 14 + 10 - 58;
     // It ends testing the count with LD A,B; OR C, with IX on its step.
     cpu.set_a(0);
     cpu.f = 0x44;

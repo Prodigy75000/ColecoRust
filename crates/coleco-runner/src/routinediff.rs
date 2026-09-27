@@ -50,11 +50,14 @@ const ALL_SAMPLES: u32 = 5000;
 /// entered by JP, or one that never returns).
 const TIMEOUT: u64 = 4_000_000;
 
-/// Back from a call made with SP at `sp0`: the return address popped and
-/// the CPU in cartridge code. Not "at the return address": the P entries
-/// return past the parameters written after their CALL.
-fn returned(m: &Coleco, sp0: u16) -> bool {
-    m.cpu.sp == sp0.wrapping_add(2) && m.cpu.pc >= 0x8000
+/// Back from a call made with SP at `sp0` to return to `ret`: the return
+/// address popped and the CPU there. A P entry returns past the parameters
+/// written after its CALL, so for those, anywhere in the cartridge will do;
+/// for the rest the address must match, or a call that never comes back
+/// the ordinary way (a tail jump) would be compared at different points on
+/// the two machines.
+fn returned(m: &Coleco, sp0: u16, ret: u16, p_entry: bool) -> bool {
+    m.cpu.sp == sp0.wrapping_add(2) && if p_entry { m.cpu.pc >= 0x8000 } else { m.cpu.pc == ret }
 }
 
 fn save<T: SaveState>(x: &T) -> Vec<u8> {
@@ -142,6 +145,9 @@ struct Tally {
     timeouts: u64,
     real_cycles: u64,
     hle_cycles: u64,
+    /// (real, HLE) cycles per sample, for the timing fit, with the title
+    /// and entry registers to name the worst call.
+    timings: Vec<(u64, u64, String)>,
     /// Difference kind (the label up to its first space) to count.
     kinds: BTreeMap<String, u64>,
     examples: Vec<String>,
@@ -209,8 +215,10 @@ fn run_title(
                 let pads = m.bus.pads;
                 let class = object_type(&m, target);
                 let sp0 = m.cpu.sp;
+                let ret = u16::from_le_bytes([m.bus.peek(sp0), m.bus.peek(sp0.wrapping_add(1))]);
+                let p_entry = coleco_core::hle::pvariant::is_entry(target);
                 let (c0, n0) = (m.cycles(), m.nmis);
-                while !returned(&m, sp0) && m.cycles() - c0 < TIMEOUT {
+                while !returned(&m, sp0, ret, p_entry) && m.cycles() - c0 < TIMEOUT {
                     m.step();
                 }
                 if m.cycles() - c0 >= TIMEOUT {
@@ -223,10 +231,11 @@ fn run_title(
                     h.load_state(&before).expect("state from the same build");
                     h.bus.pads = pads;
                     let hc0 = h.cycles();
-                    while !returned(&h, sp0) && h.cycles() - hc0 < TIMEOUT {
+                    while !returned(&h, sp0, ret, p_entry) && h.cycles() - hc0 < TIMEOUT {
                         h.step();
                     }
                     t.hle_cycles += h.cycles() - hc0;
+                    t.timings.push((m.cycles() - c0, h.cycles() - hc0, format!("{title} frame {frame} {entry}")));
                     let d = differences(&m, &h);
                     let timing_only = |k: &String| k.starts_with("STACK") || k.starts_with("VDPSTATUS");
                     if d.is_empty() {
@@ -267,6 +276,30 @@ fn run_title(
     }
 }
 
+/// Real cycles against the HLE's, per call: the least-squares line
+/// real = a * hle + b and how far calls sit from it. A slope near 1 means
+/// the HLE is off by a constant (b); another slope, by a cost per unit of
+/// work. What the timing calibration is read from.
+fn fit(samples: &[(u64, u64, String)]) -> String {
+    let n = samples.len() as f64;
+    if samples.is_empty() {
+        return "no samples".to_string();
+    }
+    let (sx, sy) = samples.iter().fold((0.0, 0.0), |(x, y), (r, h, _)| (x + *h as f64, y + *r as f64));
+    let (mx, my) = (sx / n, sy / n);
+    let (sxx, sxy) = samples.iter().fold((0.0, 0.0), |(xx, xy), (r, h, _)| {
+        (xx + (*h as f64 - mx).powi(2), xy + (*h as f64 - mx) * (*r as f64 - my))
+    });
+    let a = if sxx > 0.0 { sxy / sxx } else { 1.0 };
+    let b = my - a * mx;
+    let (lo, hi) = samples.iter().fold((u64::MAX, 0), |(lo, hi), (r, _, _)| (lo.min(*r), hi.max(*r)));
+    // The call furthest from equal time, real against HLE.
+    let (wr, wh, who) = samples.iter().max_by_key(|(r, h, _)| r.abs_diff(*h)).unwrap();
+    format!(
+        "real = {a:.3} x hle + {b:.0}; real calls {lo} to {hi}\n    worst: real {wr}, HLE {wh}: {who}"
+    )
+}
+
 fn main() {
     let mut bios_path: Option<String> = None;
     let mut routine: Option<String> = None;
@@ -302,12 +335,15 @@ fn main() {
         vec![pair]
     };
     let routines = Arc::new(routines);
-    // The real BIOS runs with OUR font patched in, so a routine that moves the
-    // font (LOAD_ASCII, or a game copying glyphs) compares equal when it moves
-    // it correctly, instead of differing by design on every glyph.
+    // The real BIOS runs with OUR data from $143B to $18D3 patched in: the
+    // font, and the title screen's logo, colours and layout, which the image
+    // leaves out (an empty layout list). So a routine that moves them (LOAD_
+    // ASCII, a game copying glyphs or the logo) compares equal when it moves
+    // them correctly, instead of differing by design on every byte. lockstep
+    // patches the same range.
     let mut bios = std::fs::read(&bios_path).expect("read bios");
     let ours = coleco_core::hle::image();
-    bios[0x158b..=0x18a2].copy_from_slice(&ours[0x158b..=0x18a2]);
+    bios[0x143b..=0x18d3].copy_from_slice(&ours[0x143b..=0x18d3]);
     let bios = Arc::new(bios);
     let root = PathBuf::from(&dir);
     let mut paths = corpus::representatives(&corpus::cartridges(&root), &root);
@@ -343,6 +379,7 @@ fn main() {
                     all.timeouts += t.timeouts;
                     all.real_cycles += t.real_cycles;
                     all.hle_cycles += t.hle_cycles;
+                    all.timings.extend(t.timings);
                     for (k, v) in t.kinds {
                         *all.kinds.entry(k).or_default() += v;
                     }
@@ -387,6 +424,7 @@ fn main() {
                 t.real_cycles / t.samples,
                 t.hle_cycles / t.samples
             );
+            println!("  timing: {}", fit(&t.timings));
         }
         for (k, v) in &t.kinds {
             println!("  differs in {k:<6} {v}");

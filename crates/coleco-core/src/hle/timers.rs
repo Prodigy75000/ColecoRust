@@ -18,6 +18,10 @@
 //! from a second area the game gives, whose next free byte is kept at
 //! `$73D5`. The table grows past its end when full, into whatever follows it.
 //!
+//! Each returns the real routine's time, summed from its instructions along
+//! the path taken (T-states in the comments), since TIME_MGR and TEST_SIGNAL
+//! run every frame in the games that use them.
+//!
 //! As elsewhere, the real routines' quirks are kept: a short one-shot keeps
 //! counting after it fires and fires again 256 calls later; a long one-shot
 //! is not written back when it reaches zero, so it fires on every call from
@@ -72,7 +76,7 @@ pub fn init_timer(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     set_ram16(bus, DATA_NEXT, data);
     cpu.set_hl(data);
     cpu.set_de(table);
-    80
+    16 + 10 + 4 + 16
 }
 
 /// TIME_MGR (`$1FD3`): one tick for every timer in use.
@@ -80,15 +84,20 @@ pub fn time_mgr(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     let mut entry = ram16(bus, TABLE);
     let (mut a, mut de) = (cpu.a(), cpu.de());
     let mut carry = cpu.f & 0x01;
-    let mut c = 40;
+    // LD HL,(nn).
+    let mut c = 16;
     for _ in 0..MAX_ENTRIES {
         let flags = peek(bus, entry);
+        // BIT 5,(HL); CALL Z, taken or not; BIT 4,(HL).
         if flags & FREE == 0 {
-            c += tick(bus, entry, &mut a, &mut de, &mut carry);
+            c += 12 + 17 + tick(bus, entry, &mut a, &mut de, &mut carry) + 12;
+        } else {
+            c += 12 + 10 + 12;
         }
         let flags = peek(bus, entry);
-        c += 50;
         if flags & LAST != 0 {
+            // JR NZ to the RET (the trap's).
+            c += 12;
             cpu.set_a(a);
             cpu.set_de(de);
             cpu.set_hl(entry);
@@ -97,14 +106,17 @@ pub fn time_mgr(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
             cpu.f = bit_mem_flags(carry, 4, flags, CODE_PAGE);
             return c;
         }
+        // JR NZ not taken, INC HL x3, JR.
+        c += 7 + 18 + 12;
         entry = entry.wrapping_add(3);
     }
     cpu.set_hl(entry);
     c
 }
 
-/// One timer's tick. `a`, `de` and `carry` follow the registers the real
-/// one leaves: a long count's test is `LD A,E; OR D`, which clears carry.
+/// One timer's tick (`$0F49`), and its time with its RET. `a`, `de` and
+/// `carry` follow the registers the real one leaves: a long count's test is
+/// `LD A,E; OR D`, which clears carry.
 fn tick(bus: &mut ColecoBus, entry: u16, a: &mut u8, de: &mut u16, carry: &mut u8) -> i32 {
     let flags = peek(bus, entry);
     let count = entry.wrapping_add(1);
@@ -112,14 +124,19 @@ fn tick(bus: &mut ColecoBus, entry: u16, a: &mut u8, de: &mut u16, carry: &mut u
         let n = peek(bus, count).wrapping_sub(1);
         bus.write(count, n);
         if n != 0 {
-            return 60;
+            // PUSH HL, BIT 3, JR Z, INC HL, DEC (HL), JR NZ, POP HL, RET.
+            return 11 + 12 + 12 + 6 + 11 + 12 + 10 + 10;
         }
         if flags & REPEAT != 0 {
             *a = peek(bus, entry.wrapping_add(2));
             bus.write(count, *a);
         }
         fire(bus, entry);
-        return 90;
+        // ... JR NZ not taken, POP HL, PUSH HL, BIT 6, then the reload or
+        // not, SET 7, POP HL, RET.
+        let head = 11 + 12 + 12 + 6 + 11 + 7 + 10 + 11 + 12;
+        let reload = if flags & REPEAT != 0 { 7 + 12 + 7 + 6 + 7 + 6 + 10 + 11 } else { 12 };
+        return head + reload + 15 + 10 + 10;
     }
     *carry = 0;
     // The count, in the entry or, for a repeating one, in its data block.
@@ -127,9 +144,17 @@ fn tick(bus: &mut ColecoBus, entry: u16, a: &mut u8, de: &mut u16, carry: &mut u
     let n = ram16(bus, at).wrapping_sub(1);
     *de = n;
     *a = (n as u8) | (n >> 8) as u8;
+    // PUSH HL, BIT 3, JR Z not taken, BIT 6, JR NZ, then the count's load,
+    // DEC DE, LD A,E, OR D: through the pointer for a repeating one.
+    let head = if flags & REPEAT == 0 {
+        11 + 12 + 7 + 12 + 7 + 6 + 7 + 6 + 7 + 6 + 4 + 4
+    } else {
+        11 + 12 + 7 + 12 + 12 + 6 + 7 + 6 + 7 + 4 + 7 + 6 + 7 + 6 + 4 + 4
+    };
     if n != 0 {
         set_ram16(bus, at, n);
-        return 90;
+        // JR NZ, LD (HL),D, DEC HL, LD (HL),E, JR, POP HL, RET.
+        return head + 12 + 7 + 6 + 7 + 12 + 10 + 10;
     }
     if flags & REPEAT != 0 {
         let reload = ram16(bus, at.wrapping_add(2));
@@ -137,7 +162,10 @@ fn tick(bus: &mut ColecoBus, entry: u16, a: &mut u8, de: &mut u16, carry: &mut u
         set_ram16(bus, at, reload);
     }
     fire(bus, entry);
-    120
+    // JR NZ not taken, the reload for a repeating one, POP HL, PUSH HL, JR,
+    // SET 7, POP HL, RET.
+    let reload = if flags & REPEAT != 0 { 6 + 7 + 6 + 7 + 12 + 7 + 6 + 7 } else { 0 };
+    head + 7 + reload + 10 + 11 + 12 + 15 + 10 + 10
 }
 
 fn fire(bus: &mut ColecoBus, entry: u16) {
@@ -153,20 +181,29 @@ pub fn request_signal(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     let count = cpu.hl();
     let mut entry = ram16(bus, TABLE);
     let mut index: u8 = 0;
-    let mut c = 60;
+    // LD C,A, EX DE,HL, LD HL,(nn), XOR A, LD B,A.
+    let mut c = 4 + 4 + 16 + 4 + 4;
     for _ in 0..MAX_ENTRIES {
         let flags = peek(bus, entry);
+        // BIT 5,(HL).
+        c += 12;
         if flags & FREE != 0 {
-            c += take(bus, entry, count, repeat);
+            c += 7 + take(bus, entry, count, repeat);
             break;
         }
-        c += 60;
+        // JR Z, BIT 4,(HL).
+        c += 12 + 12;
         if flags & LAST != 0 {
             // Full: a new free, last entry after this one, which is then
-            // found free on the next pass.
+            // found free on the next pass. JR NZ, PUSH DE, PUSH HL, INC HL
+            // x3, INC B, LD (HL),n, EX DE,HL, POP HL, RES 4, EX DE,HL,
+            // POP DE, JR.
             bus.write(entry.wrapping_add(3), FREE | LAST);
             bus.write(entry, flags & !LAST);
-            c += 80;
+            c += 12 + 11 + 11 + 18 + 4 + 10 + 4 + 10 + 15 + 4 + 10 + 12;
+        } else {
+            // JR NZ not taken, INC HL x3, INC B, JR.
+            c += 7 + 18 + 4 + 12;
         }
         entry = entry.wrapping_add(3);
         index = index.wrapping_add(1);
@@ -182,10 +219,24 @@ pub fn request_signal(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
 }
 
 /// Set up a free entry. It stays marked free while it is filled in and is
-/// released at the end, as the real one does it.
+/// released at the end, as the real one does it. Returns its time, to the
+/// routine's end.
 fn take(bus: &mut ColecoBus, entry: u16, count: u16, repeat: u8) -> i32 {
     let mut flags = (peek(bus, entry) & LAST) | FREE;
     let (lo, hi) = (count as u8, (count >> 8) as u8);
+    // PUSH HL, LD A,(HL), AND, OR, LD (HL),A, XOR A, OR D; at the end POP HL,
+    // RES 5, LD A,B.
+    let mut c = 11 + 7 + 7 + 7 + 7 + 4 + 4 + 10 + 15 + 4;
+    c += if hi == 0 {
+        // JR NZ not taken, OR C, JR Z (or SET 6), INC HL, two LD (HL),E, JR.
+        7 + 4 + if repeat != 0 { 7 + 15 } else { 12 } + 6 + 7 + 6 + 7 + 12
+    } else if repeat == 0 {
+        // JR NZ, SET 3, LD A,C, OR A, JR Z, then three INC HL, two stores, JR.
+        12 + 15 + 4 + 4 + 12 + 18 + 14 + 12
+    } else {
+        // JR NZ, SET 3, LD A,C, OR A, JR Z not taken, and the data block.
+        12 + 15 + 4 + 4 + 7 + 11 + 4 + 16 + 4 + 15 + 6 + 7 + 6 + 7 + 4 + 10 + 7 + 6 + 7 + 6 + 7 + 6 + 7 + 6 + 16 + 12
+    };
     if hi == 0 {
         if repeat != 0 {
             flags |= REPEAT;
@@ -208,7 +259,7 @@ fn take(bus: &mut ColecoBus, entry: u16, count: u16, repeat: u8) -> i32 {
     }
     let flags = peek(bus, entry);
     bus.write(entry, flags & !FREE);
-    120
+    c
 }
 
 /// Where a walk to signal `n` stopped: the entry reached, what was left of
@@ -219,6 +270,9 @@ struct Found {
     left: u8,
     found: bool,
     memptr_hi: u8,
+    /// T-states of the walk: LD C,A; LD HL,(nn); LD B,A; LD DE,3; OR A;
+    /// JR Z; then per entry BIT 4,(HL); JR NZ; ADD HL,DE; DEC C; JR NZ.
+    t: i32,
 }
 
 /// Walk from the table's start to signal `n`, stopping early at the LAST
@@ -229,19 +283,24 @@ fn find(bus: &mut ColecoBus, n: u8) -> Found {
     let mut entry = ram16(bus, TABLE);
     let mut left = n;
     let mut memptr_hi = 0x73;
+    let mut t = 4 + 16 + 4 + 10 + 4;
     if n == 0 {
-        return Found { entry, left, found: true, memptr_hi: CODE_PAGE };
+        return Found { entry, left, found: true, memptr_hi: CODE_PAGE, t: t + 12 };
     }
+    t += 7;
     loop {
+        t += 12;
         if peek(bus, entry) & LAST != 0 {
-            return Found { entry, left, found: false, memptr_hi };
+            return Found { entry, left, found: false, memptr_hi, t: t + 12 };
         }
+        t += 7 + 11 + 4;
         memptr_hi = (entry.wrapping_add(1) >> 8) as u8;
         entry = entry.wrapping_add(3);
         left = left.wrapping_sub(1);
         if left == 0 {
-            return Found { entry, left, found: true, memptr_hi };
+            return Found { entry, left, found: true, memptr_hi, t: t + 7 };
         }
+        t += 12;
         memptr_hi = CODE_PAGE;
     }
 }
@@ -252,13 +311,22 @@ pub fn test_signal(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     let n = cpu.a();
     let at = find(bus, n);
     let mut fired = false;
+    let mut c = at.t;
     if at.found {
         let flags = peek(bus, at.entry);
+        // BIT 5, JR NZ; then BIT 7, JR NZ.
+        c += 12 + if flags & FREE != 0 { 12 } else { 7 + 12 + if flags & DONE != 0 { 12 } else { 7 } };
         if flags & FREE == 0 && flags & DONE != 0 {
+            // BIT 6, JR NZ or SET 5, RES 7, LD A,1, OR A.
+            c += 12 + if flags & REPEAT != 0 { 12 } else { 7 + 15 } + 15 + 7 + 4;
             let flags = if flags & REPEAT == 0 { flags | FREE } else { flags };
             bus.write(at.entry, flags & !DONE);
             fired = true;
         }
+    }
+    if !fired {
+        // XOR A, JR, OR A.
+        c += 4 + 12 + 4;
     }
     let a = u8::from(fired);
     cpu.set_a(a);
@@ -266,7 +334,7 @@ pub fn test_signal(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     cpu.set_bc(u16::from_be_bytes([n, at.left]));
     cpu.set_de(3);
     cpu.set_hl(at.entry);
-    80 + 40 * n as i32
+    c
 }
 
 /// FREE_SIGNAL (`$1FCA`): release signal A. A long repeating one also gives
@@ -285,46 +353,81 @@ pub fn free_signal(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     let test = |bit: u32| bit_mem_flags(0, bit, flags, at.memptr_hi);
     if !at.found {
         cpu.f = test(4);
-        return 80;
+        return at.t;
     }
+    // BIT 5, JR NZ.
     if flags & FREE != 0 {
         cpu.f = test(5);
-        return 80;
+        return at.t + 12 + 12;
     }
     bus.write(entry, flags | FREE);
+    // JR NZ not taken, SET 5, BIT 6, JR Z.
+    let t = at.t + 12 + 7 + 15 + 12;
     if flags & REPEAT == 0 {
         cpu.f = test(6);
-        return 100;
+        return t + 12;
     }
+    // BIT 3, JR Z.
     if flags & LONG == 0 {
         cpu.f = test(3);
-        return 100;
+        return t + 7 + 12 + 12;
     }
     let freed = ram16(bus, entry.wrapping_add(1));
     let mut de = freed;
     let mut e = ram16(bus, TABLE);
-    let mut c = 200;
+    // JR Z not taken, then INC HL, LD E, INC HL, LD D, PUSH DE, LD HL,(nn),
+    // PUSH HL.
+    let mut c = t + 7 + 12 + 7 + 6 + 7 + 6 + 7 + 11 + 16 + 11;
     for _ in 0..MAX_ENTRIES {
         let f = peek(bus, e);
+        // BIT 4, JR NZ.
+        c += 12;
         if f & LAST != 0 {
+            c += 12;
             break;
         }
-        c += 80;
-        if f & FREE == 0 && f & (REPEAT | LONG) == REPEAT | LONG {
-            let block = ram16(bus, e.wrapping_add(1));
-            if block == de {
-                // Unreachable with a sound table (the freed entry is already
-                // marked free); the real one returns here with its stack off
-                // by two words.
-                return c;
-            }
-            if block > de {
-                de = block.wrapping_sub(4);
-                set_ram16(bus, e.wrapping_add(1), de);
+        // JR NZ not taken, BIT 5, JR NZ; the next-entry step (POP HL, INC HL
+        // x3, PUSH HL, JR) below.
+        c += 7 + 12;
+        if f & FREE != 0 {
+            c += 12;
+        } else {
+            // JR NZ not taken, LD A,(HL), AND, CP, JR NZ.
+            c += 7 + 7 + 7 + 7;
+            if f & (REPEAT | LONG) != REPEAT | LONG {
+                c += 12;
+            } else {
+                // JR NZ not taken, INC HL x2, LD A,(HL), CP D, JR C.
+                c += 7 + 12 + 7 + 4;
+                let block = ram16(bus, e.wrapping_add(1));
+                if block == de {
+                    // Unreachable with a sound table (the freed entry is
+                    // already marked free); the real one returns here with
+                    // its stack off by two words.
+                    return c;
+                }
+                if block > de {
+                    // Through to the step down: LD D, DEC HL, LD E, DEC DE
+                    // x4, two stores, INC HL, JR (and the low-byte compare
+                    // when the high bytes match).
+                    c += 7 + 7 + 7 + 6 + 7 + 24 + 7 + 6 + 7 + 12;
+                    if (block >> 8) == (de >> 8) {
+                        c += 6 + 7 + 4 + 7 + 7 + 6 - 7;
+                    }
+                    de = block.wrapping_sub(4);
+                    set_ram16(bus, e.wrapping_add(1), de);
+                } else {
+                    c += 12;
+                }
             }
         }
+        c += 10 + 18 + 11 + 12;
         e = e.wrapping_add(3);
     }
+    // LD B,0, OR A, POP HL, POP DE, PUSH HL, LD HL,(nn), SBC HL,DE, LD C,L,
+    // LD L,E, LD H,D, INC HL x4, then after the move LD BC,8, SBC HL,BC,
+    // LD (nn),HL, POP HL.
+    c += 7 + 4 + 10 + 10 + 11 + 16 + 15 + 4 + 4 + 4 + 24 + 10 + 15 + 16 + 10;
     let end = ram16(bus, DATA_NEXT);
     let len = end.wrapping_sub(freed) & 0xff;
     let moved = if len == 0 { 0x10000 } else { len as u32 };
@@ -335,7 +438,7 @@ pub fn free_signal(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     let borrow = u16::from(end < freed);
     let next = freed.wrapping_add(4).wrapping_add(moved as u16).wrapping_sub(8).wrapping_sub(borrow);
     set_ram16(bus, DATA_NEXT, next);
-    c + 21 * moved as i32
+    c + 21 * moved as i32 - 5
 }
 
 #[cfg(test)]

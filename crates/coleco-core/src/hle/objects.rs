@@ -109,6 +109,29 @@ fn table_call(
     routine(cpu, bus) + 60
 }
 
+/// One call of a VRAM table routine with its register arguments: the
+/// routine's own time only, for callers that count their CALL, the jump
+/// table's JP and the RET themselves.
+fn vram_body(
+    cpu: &mut Z80,
+    bus: &mut ColecoBus,
+    routine: fn(&mut Z80, &mut ColecoBus) -> i32,
+    table: u8,
+    index: u16,
+    src: u16,
+    count: u16,
+) -> i32 {
+    cpu.set_a(table);
+    cpu.set_de(index);
+    cpu.set_hl(src);
+    cpu.iy = count;
+    routine(cpu, bus)
+}
+
+/// A call through the jump table from inside the BIOS: CALL, the slot's JP,
+/// and the routine's RET.
+const TABLE_CALL: i32 = 17 + 10 + 10;
+
 /// One block move between RAM at `ram` and VRAM at `vram`.
 fn block_call(
     cpu: &mut Z80,
@@ -150,7 +173,8 @@ pub fn activate(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
             cpu.f = f;
         }
     }
-    c + 200
+    // Its RET is the trap's.
+    c - 10
 }
 
 fn activate_at(
@@ -180,12 +204,18 @@ fn activate_one(
     bus.write(status, 0);
     let kind = peek(bus, gfx);
     let byte = |bus: &mut ColecoBus, i: u16| peek(bus, gfx.wrapping_add(i));
+    // The time, with the RET: the descriptor's four bytes, LD A,0, LD (BC),A,
+    // LD A,(DE), PUSH AF, AND 15, and a DEC A and jump per type passed.
+    let head = [101, 115, 129, 143, 159][(kind & 0x0f).min(4) as usize];
     // The registers each path leaves, since a game may read them: BC starts
     // as the status pointer, and marking an old screen in VRAM leaves the
     // BC and HL of the one-byte WRITE_VRAM that does it.
-    match kind & 0x0f {
+    head + match kind & 0x0f {
         0 => {
             let (mut c, vram) = mark_old_screen(bus, desc);
+            // CALL $0572; then the first pattern and count to status + 5,
+            // POP AF, JR NC.
+            c += 17 + 64;
             let first = byte(bus, 1);
             let count = byte(bus, 2);
             bus.write(status.wrapping_add(5), first.wrapping_add(count));
@@ -195,12 +225,17 @@ fn activate_one(
             cpu.set_hl(first as u16);
             if load {
                 let patterns = ram16(bus, gfx.wrapping_add(3));
-                c += load_patterns(cpu, bus, kind, first, count, patterns);
+                // JR NC not taken, PUSH AF, LD A,(nn), BIT 1,A.
+                c += 7 + 11 + 13 + 8 + load_patterns(cpu, bus, kind, first, count, patterns);
+            } else {
+                c += 12 + 10;
             }
             c
         }
         1 => {
             let (c, vram) = mark_old_screen(bus, desc);
+            // CALL $0572, the two bytes to status + 5 and + 6, POP AF, RET.
+            let c = c + 17 + 74 + 10;
             let (a, b) = (byte(bus, 2), byte(bus, 3));
             bus.write(status.wrapping_add(5), a);
             bus.write(status.wrapping_add(6), b);
@@ -219,18 +254,23 @@ fn activate_one(
             cpu.iy = count as u16;
             cpu.set_hl(patterns);
             cpu.set_de(first as u16);
-            if load {
-                table_call(cpu, bus, put_vram, 1, first as u16, patterns, count as u16)
+            // The status + 5 byte and the registers for the load, POP AF;
+            // RET NC, or LD A,1, CALL $1C27 and its RET, and the RET.
+            188 + if load {
+                5 + 7 + 17 + vram_body(cpu, bus, put_vram, 1, first as u16, patterns, count as u16) + 10 + 10
             } else {
-                0
+                11
             }
         }
         4 => {
             let parts = kind >> 4;
-            let mut c = 0;
+            // The count from the graphics byte, the first part's pointer,
+            // OR A, JR Z; per part POP AF, PUSH AF, PUSH HL, PUSH BC, EX DE,HL,
+            // CALL $04A3, POP BC, POP HL, the next pointer, DJNZ; POP AF, RET.
+            let mut c = 64 + if parts == 0 { 12 } else { 7 } + 10 + 10;
             for i in 0..parts as u16 {
                 let part = ram16(bus, desc.wrapping_add(4 + 2 * i));
-                c += activate_at(cpu, bus, part, load, budget) + 80;
+                c += 64 + activate_at(cpu, bus, part, load, budget) + 46 + if i + 1 == parts as u16 { 8 } else { 13 };
             }
             // The loop reads one pointer past the last part; C is still the
             // status pointer's low byte.
@@ -244,7 +284,8 @@ fn activate_one(
             cpu.set_bc(status);
             cpu.set_de(gfx);
             cpu.set_hl(desc.wrapping_add(4));
-            0
+            // DEC A, JR Z not taken, POP AF, RET.
+            4 + 7 + 10 + 10
         }
     }
 }
@@ -252,21 +293,25 @@ fn activate_one(
 /// Mark a background object's old screen empty: `$80` in its first byte,
 /// in RAM or VRAM as the pointer says. No old screen, no mark. Also says
 /// whether it was VRAM, which changes the registers left behind.
+/// The time is `$0572`'s with its RET: PUSH BC, POP IY, PUSH DE, the
+/// pointer, BIT 7,D, JR NZ, and the store (or the one-byte WRITE_VRAM),
+/// then POP DE, INC DE, RET.
 fn mark_old_screen(bus: &mut ColecoBus, desc: u16) -> (i32, bool) {
     let old = ram16(bus, desc.wrapping_add(4));
     let hi = (old >> 8) as u8;
     if hi & 0x80 != 0 {
-        return (0, false);
+        return (64 + 12 + 26, false);
     }
     if hi >= RAM_PAGE {
         bus.write(old, 0x80);
-        return (30, false);
+        return (64 + 51 + 26, false);
     }
     let ctl = old.wrapping_add(0x4000);
     bus.vdp.write_control(ctl as u8);
     bus.vdp.write_control((ctl >> 8) as u8);
     bus.vdp.write_data(0x80);
-    (100, true)
+    // JR C to the VRAM case, LD HL,nn, LD BC,1, CALL $1D01, its 173 and RET.
+    (64 + 77 + 173 + 26, true)
 }
 
 /// A background object's patterns and colours into VRAM. In graphics mode 2
@@ -285,15 +330,29 @@ fn load_patterns(
     let colours = patterns.wrapping_add(bytes);
     let mut c = 0;
     if mode2(bus) {
+        // JR Z not taken, the pointers and counts set up, POP BC, POP IY,
+        // POP AF; per third BIT and JR Z (or CALL $0594), and the $100 step
+        // (CALL $05E8) after the first two; RET.
+        c += 7 + 149 + 17 + 60 + 17 + 60 + 10;
         let mut name = first as u16;
         for bit in [0x80, 0x40, 0x20] {
+            c += 8;
             if kind & bit != 0 {
-                c += table_call(cpu, bus, put_vram, 3, name, patterns, count as u16);
+                // $0594: five PUSH, LD A,3, CALL $1C27 and RET, five POP,
+                // five PUSH, BIT 4,A, JR NZ.
+                c += 7 + 17 + 59 + 7 + 17 + 10 + 54 + 59 + 8;
+                c += vram_body(cpu, bus, put_vram, 3, name, patterns, count as u16);
                 if kind & 0x10 == 0 {
-                    c += table_call(cpu, bus, put_vram, 4, name, colours, count as u16);
+                    // ADD HL,BC, LD A,4, CALL $1C27 and RET, five POP, RET.
+                    c += 7 + 11 + 7 + 17 + 10 + 54 + 10;
+                    c += vram_body(cpu, bus, put_vram, 4, name, colours, count as u16);
                 } else {
-                    c += spread_colours(cpu, bus, name, colours, count as u16);
+                    // JR NZ, the colour pointer, IY into HL; the spread;
+                    // JR back, five POP, RET.
+                    c += 12 + 44 + spread_colours(cpu, bus, name, colours, count as u16) + 12 + 54 + 10;
                 }
+            } else {
+                c += 12;
             }
             name = name.wrapping_add(0x100);
         }
@@ -305,14 +364,17 @@ fn load_patterns(
         cpu.set_hl(patterns);
         return c;
     }
-    c += table_call(cpu, bus, put_vram, 3, first as u16, patterns, count as u16);
+    // JR Z, the patterns' setup, PUT_VRAM with its CALL and RET, the colour
+    // groups' arithmetic, the second PUT_VRAM, POP AF, RET.
+    c += 12 + 430 + 10;
+    c += vram_body(cpu, bus, put_vram, 3, first as u16, patterns, count as u16);
     // Colour groups of eight patterns, first to last. The first group comes
     // from an arithmetic shift of the 8-bit pattern number, so a first
     // pattern of `$80` or more gives a "negative" group: the real BIOS's.
     let last = (first as u16 + count as u16).wrapping_sub(1) >> 3;
     let group = ((first as i8) >> 3) as u8 as u16;
     let groups = last.wrapping_sub(group).wrapping_add(1);
-    c + table_call(cpu, bus, put_vram, 4, group, colours, groups)
+    c + vram_body(cpu, bus, put_vram, 4, group, colours, groups)
 }
 
 /// Mode 2 colours given one byte per pattern: each byte is written as that
@@ -327,12 +389,15 @@ fn spread_colours(cpu: &mut Z80, bus: &mut ColecoBus, name: u16, colours: u16, c
         for i in 0..8 {
             bus.write(buffer.wrapping_add(i), v);
         }
-        c += table_call(cpu, bus, put_vram, 4, name, buffer, 1) + 200;
+        // PUSH HL, the byte, PUSH BC, the buffer's end, eight DEC HL, LD
+        // (HL),A, DJNZ, PUSH DE, LD IY,1, LD A,4, CALL $1C27 and RET, the
+        // pops and steps, DEC HL, LD A,H, OR L, JR NZ.
+        c += 403 + vram_body(cpu, bus, put_vram, 4, name, buffer, 1);
         name = name.wrapping_add(1);
         src = src.wrapping_add(1);
         left = left.wrapping_sub(1);
         if left == 0 {
-            return c;
+            return c - 5;
         }
     }
 }
@@ -342,7 +407,7 @@ fn spread_colours(cpu: &mut Z80, bus: &mut ColecoBus, name: u16, colours: u16, c
 /// flags. With DEFER_WRITES set, the object goes into WRITER's queue instead.
 pub fn putobj(cpu: &mut Z80, bus: &mut ColecoBus) -> Option<i32> {
     let (desc, param) = (cpu.ix, (cpu.bc() >> 8) as u8);
-    putobj_at(cpu, bus, desc, param, &mut Budget::new()).map(|c| c + 100)
+    putobj_at(cpu, bus, desc, param, &mut Budget::new())
 }
 
 fn putobj_at(
@@ -352,17 +417,18 @@ fn putobj_at(
     param: u8,
     budget: &mut Budget,
 ) -> Option<i32> {
+    // LD A,(nn), CP 1, JR NZ; deferred, CALL $0623 and the queue with its
+    // RET (the routine's own RET is the caller's).
     if peek(bus, DEFER) == 1 {
-        queue(cpu, bus, desc, param);
-        return Some(150);
+        return Some(13 + 7 + 7 + 17 + queue(cpu, bus, desc, param));
     }
-    draw_object(cpu, bus, desc, param, budget)
+    Some(13 + 7 + 12 + draw_object(cpu, bus, desc, param, budget)?)
 }
 
 /// Add an object to the deferred-write queue: its address and B, three
 /// bytes, wrapping to the start after `size` entries. Registers as the real
 /// one leaves them, since this is the whole routine for a deferring game.
-fn queue(cpu: &mut Z80, bus: &mut ColecoBus, desc: u16, param: u8) {
+fn queue(cpu: &mut Z80, bus: &mut ColecoBus, desc: u16, param: u8) -> i32 {
     let at = ram16(bus, QUEUE_IN_PTR);
     bus.write(at, desc as u8);
     bus.write(at.wrapping_add(1), (desc >> 8) as u8);
@@ -383,6 +449,9 @@ fn queue(cpu: &mut Z80, bus: &mut ColecoBus, desc: u16, param: u8) {
         cpu.set_a(next);
         cpu.set_hl(QUEUE_SIZE);
     }
+    // PUSH IX, LD HL,(nn), POP DE, three stores and INC HL, EX DE,HL, LD A,
+    // INC A, LD HL,nn, CP (HL); then the wrap or the next pointer; RET.
+    118 + if next == size { 7 + 7 + 13 + 16 + 16 + 12 } else { 12 + 13 + 20 } + 10
 }
 
 fn draw_object(
@@ -410,13 +479,17 @@ fn draw_one(
     let gfx = ram16(bus, desc);
     let kind = peek(bus, gfx);
     cpu.ix = desc;
-    match kind & 0x0f {
-        0 => Some(semi_mobile(cpu, bus, desc, gfx)),
-        1 => Some(mobile(cpu, bus, desc, gfx, param)),
-        2 => Some(sprite(cpu, bus, desc, gfx, 0x08, 0xf9)),
-        3 => Some(sprite(cpu, bus, desc, gfx, 0x20, 0xe1)),
-        _ => complex(cpu, bus, desc, gfx, kind, param, budget),
-    }
+    // From $06E3: LD H,(IX+1), LD L,(IX), LD A,(HL), LD C,A, AND, JP Z, and
+    // a DEC A and JP Z per type passed. The time returned runs to the type's
+    // last instruction before its RET.
+    let dispatch = [66, 80, 94, 108, 118];
+    Some(dispatch[(kind & 0x0f).min(4) as usize] + match kind & 0x0f {
+        0 => semi_mobile(cpu, bus, desc, gfx),
+        1 => mobile(cpu, bus, desc, gfx, param),
+        2 => sprite(cpu, bus, desc, gfx, 0x08, 0xf9),
+        3 => sprite(cpu, bus, desc, gfx, 0x20, 0xe1),
+        _ => complex(cpu, bus, desc, gfx, kind, param, budget)?,
+    })
 }
 
 /// A 16-bit pixel coordinate as a signed character cell, clamped to a byte.
@@ -450,41 +523,68 @@ fn semi_mobile(cpu: &mut Z80, bus: &mut ColecoBus, desc: u16, gfx: u16) -> i32 {
     let names = at.wrapping_add(2);
     let old = ram16(bus, desc.wrapping_add(4));
     let old_hi = (old >> 8) as u8;
+    // The status into IY, both coordinates through $07E8, the frame's
+    // record and its size, LD A,(IX+5), BIT 7,A.
+    let mut c = 365 + clamp_time(ram16(bus, status.wrapping_add(1))) + clamp_time(ram16(bus, status.wrapping_add(3)));
     if old_hi & 0x80 != 0 {
-        // Straight out of the drawing, IX as its PUT_VRAMs left it.
-        return draw_cells(cpu, bus, names, row, col, w, h) + 300;
+        // Straight out of the drawing, IX as its PUT_VRAMs left it: JR Z not
+        // taken, CALL $080B.
+        return c + 7 + 17 + draw_cells(cpu, bus, names, row, col, w, h);
     }
-    let mut c = 300;
+    // JR Z, three PUSH, CP $70, and the page's jumps.
+    c += 12 + 33 + 7 + match old_hi {
+        RAM_PAGE => 12,
+        h if h > RAM_PAGE => 7 + 7,
+        _ => 7 + 12,
+    };
     // What it covered last time, from RAM, or read back from VRAM into the
     // work buffer.
     let saved = if old_hi >= RAM_PAGE {
+        // LD H,A, LD L,(IX+4), LD A,(HL), JR.
+        c += 42;
         old
     } else {
         let buffer = ram16(bus, WORK_BUFFER);
-        c += block_call(cpu, bus, read_vram, buffer, old, 4);
+        // LD HL,(nn), LD D,(IX+5), LD E,(IX+4), three PUSH, LD BC,4, CALL
+        // $1D3E and its RET, POP HL, LD A,(HL), CP $80.
+        c += 114 + 10 + 10 + 7 + 7;
+        cpu.set_hl(buffer);
+        cpu.set_de(old);
+        cpu.set_bc(4);
+        c += read_vram(cpu, bus);
         if peek(bus, buffer) != 0x80 {
             let (sw, sh) = (
                 peek(bus, buffer.wrapping_add(2)),
                 peek(bus, buffer.wrapping_add(3)),
             );
             let n = doubled(sh as u16, sw);
-            c += block_call(
-                cpu,
-                bus,
-                read_vram,
-                buffer.wrapping_add(4),
-                old.wrapping_add(4),
-                n,
-            );
+            // JR NZ, the size's load, the doubling, the count into BC, the
+            // address past the header, CALL $1D3E and its RET, POP HL.
+            c += 12 + 49 + doubling_time(sw) + 59 + 27 + 10;
+            cpu.set_hl(buffer.wrapping_add(4));
+            cpu.set_de(old.wrapping_add(4));
+            cpu.set_bc(n);
+            c += read_vram(cpu, bus);
+        } else {
+            // JR NZ not taken, POP DE, JR, POP HL.
+            c += 7 + 10 + 12 + 10;
         }
         buffer
     };
+    // LD A,(HL), CP $80, JR Z.
+    c += 7 + 7;
     if peek(bus, saved) != 0x80 {
         let s = |bus: &mut ColecoBus, i: u16| peek(bus, saved.wrapping_add(i));
         let (sc, sr, sw, sh) = (s(bus, 0), s(bus, 1), s(bus, 2), s(bus, 3));
+        // JR Z not taken, the header's four loads, PUSH IX, CALL $080B, POP IX.
+        c += 7 + 59 + 15 + 17 + 14;
         c += draw_cells(cpu, bus, saved.wrapping_add(4), sr, sc, sw, sh);
+    } else {
+        c += 12;
     }
-    // What it covers now.
+    // What it covers now. Three POP, three PUSH, the old screen's address,
+    // LD A,$70, CP H, JR C (or the buffer's address), the header stored.
+    c += 112 + if old_hi > RAM_PAGE { 12 } else { 7 + 16 } + 52;
     let keep = if old_hi > RAM_PAGE {
         old
     } else {
@@ -493,8 +593,10 @@ fn semi_mobile(cpu: &mut Z80, bus: &mut ColecoBus, desc: u16, gfx: u16) -> i32 {
     for (i, v) in [col, row, w, h].into_iter().enumerate() {
         bus.write(keep.wrapping_add(i as u16), v);
     }
-    c += save_cells(cpu, bus, keep.wrapping_add(4), row, col, w, h);
-    c += draw_cells(cpu, bus, names, row, col, w, h);
+    // PUSH IX, CALL $0898, POP IX; three POP; PUSH IX, CALL $080B, POP IX;
+    // LD D,(IX+5), LD A,$70, CP D.
+    c += 15 + 17 + save_cells(cpu, bus, keep.wrapping_add(4), row, col, w, h) + 14;
+    c += 30 + 15 + 17 + draw_cells(cpu, bus, names, row, col, w, h) + 14 + 30;
     // The drawing is wrapped in PUSH IX / POP IX here, then the old screen's
     // page is tested: RAM ends there, VRAM writes the buffer back.
     cpu.ix = desc;
@@ -505,8 +607,15 @@ fn semi_mobile(cpu: &mut Z80, bus: &mut ColecoBus, desc: u16, gfx: u16) -> i32 {
             peek(bus, buffer.wrapping_add(3)),
         );
         let n = doubled(sw as u16, sh);
-        c += block_call(cpu, bus, write_vram, buffer, old, n);
+        // JR Z and JR C not taken, the size through the alternates, the
+        // doubling, the count and buffer, CALL $1D01 and its RET.
+        c += 7 + 7 + 93 + doubling_time(sh) + 35 + 27;
+        cpu.set_hl(buffer);
+        cpu.set_de(old);
+        cpu.set_bc(n);
+        c += write_vram(cpu, bus);
     } else {
+        c += if old_hi == RAM_PAGE { 12 } else { 7 + 12 };
         cpu.set_a(RAM_PAGE);
         cpu.f = cp_flags(RAM_PAGE, old_hi);
         cpu.set_de(u16::from_be_bytes([old_hi, cpu.de() as u8]));
@@ -777,8 +886,9 @@ pub fn clamp_entry(cpu: &mut Z80) -> i32 {
     let f = bit_flags(rr, 7, d);
     let bound: u16 = if d & 0x80 == 0 { 0xff80 } else { 0x0080 };
     cpu.f = super::routines::add16_flags(f, bound, de);
+    let t = clamp_time(cpu.de()) - 10;
     cpu.set_de(u16::from_be_bytes([d, cell(cpu.de())]));
-    100
+    t
 }
 
 /// `$08C0` called directly: signed row D and column E as a name-table
@@ -797,7 +907,7 @@ pub fn offset_entry(cpu: &mut Z80) -> i32 {
     let de = (col as i8 as i16) as u16;
     cpu.f = super::routines::add16_flags(f, rows, de);
     cpu.set_de(cell_offset(row, col));
-    120
+    offset_time(row, col)
 }
 
 /// `$080B` called directly: HL names, D row, E column, C width, B height.
@@ -805,7 +915,35 @@ pub fn draw_entry(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     let [row, col] = cpu.de().to_be_bytes();
     let [h, w] = cpu.bc().to_be_bytes();
     let src = cpu.hl();
-    draw_cells(cpu, bus, src, row, col, w, h)
+    // Its RET is the trap's.
+    draw_cells(cpu, bus, src, row, col, w, h) - 10
+}
+
+/// `$07E8`'s time with its RET: PUSH HL, three SRA D and RR E, BIT 7,D,
+/// JR NZ, LD HL,nn, ADD HL,DE, POP HL, and RET NC or C (or LD E,n and RET
+/// when it clamps).
+fn clamp_time(pixels: u16) -> i32 {
+    let v = (pixels as i16) >> 3;
+    match (v < 0, (-128..=127).contains(&v)) {
+        (false, true) => 116,
+        (false, false) => 127,
+        (true, true) => 121,
+        (true, false) => 132,
+    }
+}
+
+/// `$08C0`'s time without its RET: PUSH HL, BIT 7,D and the high byte, LD
+/// L,D, five ADD HL,HL, BIT 7,E and D's sign, ADD HL,DE, EX DE,HL, POP HL.
+fn offset_time(row: u8, col: u8) -> i32 {
+    let r = if row & 0x80 != 0 { 45 } else { 38 };
+    let c = if col & 0x80 != 0 { 26 } else { 19 };
+    r + 4 + 55 + 8 + c + 25
+}
+
+/// A DJNZ doubling loop's time: JR to the DJNZ, then ADD HL,HL and DJNZ per
+/// doubling, and the DJNZ that falls through (256 turns for 0).
+fn doubling_time(times: u8) -> i32 {
+    12 + 24 * times.wrapping_sub(1) as i32 + 8
 }
 
 /// A cell position as a name-table offset: row times 32 plus column, both
@@ -825,22 +963,45 @@ fn draw_cells(cpu: &mut Z80, bus: &mut ColecoBus, src: u16, row: u8, col: u8, w:
     cpu.set_bc(u16::from_be_bytes([h, w]));
     cpu.set_de(u16::from_be_bytes([row, col]));
     cpu.set_hl(names);
+    // The time, with the RET: three PUSH, EXX, three POP, CALL $08C0 and its
+    // RET, EXX, LD A,E, BIT 7,A; for a column on the left JR NZ, CP $20 and
+    // RET NC; then ADD A,C, BIT 7,A, RET NZ, OR A, RET Z.
+    let mut t = 108 + offset_time(row, col) + 12;
+    t += if col & 0x80 == 0 { 14 } else { 12 };
     if col & 0x80 == 0 && col >= 0x20 {
         cpu.set_a(col);
         cpu.f = cp_flags(col, 0x20);
-        return 40;
+        return t + 11;
     }
+    if col & 0x80 == 0 {
+        t += 5;
+    }
+    t += 12;
     let end = col.wrapping_add(w);
     if end & 0x80 != 0 {
         cpu.set_a(end);
         cpu.f = bit_flags(u8::from(col as u16 + w as u16 > 0xff), 7, end);
-        return 50;
+        return t + 11;
     }
+    t += 5 + 4;
     if end == 0 {
         cpu.set_a(0);
         cpu.f = sz53p(0);
-        return 50;
+        return t + 11;
     }
+    // RET Z not taken, BIT 7,E, and the clipping for either side.
+    t += 5 + 8;
+    t += if col & 0x80 != 0 {
+        7 + 176 + if end < 0x21 { 12 } else { 14 }
+    } else {
+        12 + 15 + match end {
+            0x1f => 12 + 53,
+            e if e < 0x1f => 19 + 53,
+            _ => 94,
+        }
+    };
+    // LD E,0.
+    t += 7;
     let count = if col & 0x80 != 0 {
         let skip = col.wrapping_neg() as u16;
         src = src.wrapping_add(skip);
@@ -851,18 +1012,26 @@ fn draw_cells(cpu: &mut Z80, bus: &mut ColecoBus, src: u16, row: u8, col: u8, w:
     } else {
         0x20u8.wrapping_sub(col)
     };
-    let mut c = 100;
+    let mut c = t;
     let mut r: u8 = 0;
     loop {
         let y = row.wrapping_add(r);
-        if y & 0x80 == 0 && y < 0x18 {
-            c += table_call(cpu, bus, put_vram, 2, offset, src, count as u16) + 60;
+        // LD A,D, ADD A,E, BIT 7,A, JR NZ; CP $18, JR NC; the pushes and
+        // EXX around CALL $1C27 and its RET.
+        c += 16;
+        if y & 0x80 != 0 {
+            c += 12;
+        } else if y >= 0x18 {
+            c += 7 + 7 + 12;
+        } else {
+            c += 21 + 186 + vram_body(cpu, bus, put_vram, 2, offset, src, count as u16);
         }
         src = src.wrapping_add(w as u16);
         offset = offset.wrapping_add(0x20);
         r = r.wrapping_add(1);
-        // Per row, the real loop's EXX dance and pushes around PUT_VRAM.
-        c += 400;
+        // The pointers stepped through the alternates, INC E, LD A,E, CP B,
+        // JR NZ; the RET at the end.
+        c += 76 + 12 + if r == h { 7 + 10 } else { 12 };
         if r == h {
             cpu.set_a(h);
             cpu.f = cp_flags(h, h);
@@ -881,15 +1050,18 @@ fn save_cells(cpu: &mut Z80, bus: &mut ColecoBus, dst: u16, row: u8, col: u8, w:
     let mut offset = cell_offset(row, col);
     let mut dst = dst;
     let mut left = h;
-    let mut c = 60;
+    // CALL $08C0 and its RET, the width into IY; per row the pushes, GET_VRAM
+    // through the table, the pointers stepped, DEC B, JR NZ; the RET.
+    let mut c = 17 + offset_time(row, col) + 10 + 53;
     loop {
-        c += table_call(cpu, bus, get_vram, 2, offset, dst, w as u16) + 60;
+        c += 208 + vram_body(cpu, bus, get_vram, 2, offset, dst, w as u16);
         dst = dst.wrapping_add(w as u16);
         offset = offset.wrapping_add(0x20);
         left = left.wrapping_sub(1);
         if left == 0 {
-            return c;
+            return c + 7 + 10;
         }
+        c += 12;
     }
 }
 
@@ -910,13 +1082,33 @@ fn sprite(cpu: &mut Z80, bus: &mut ColecoBus, desc: u16, gfx: u16, shift: u16, e
         let (lo, hi) = (v as u8, (v >> 8) as u8);
         hi == 0 || (hi == 0xff && lo.wrapping_sub(edge) & 0x80 == 0)
     };
+    // A coordinate's test: CP 0, JR Z; or CP $FF, JP NZ, LD A,C, CP n, JP M.
+    let test = |v: u16| match (v >> 8) as u8 {
+        0 => 12,
+        0xff => 7 + 7 + 10 + 4 + 7 + 10,
+        _ => 7 + 7 + 10,
+    };
+    // LD IY,(nn), the status pointer, LD DE,1, ADD HL,DE, X into BC, LD A,B,
+    // CP 0, and X's test; then Y's load (INC HL, LD C, INC HL, LD B, LD A,B,
+    // CP 0) and test.
+    let mut c = 110 + test(x);
+    if shown(x) {
+        c += 37 + test(y);
+    }
     if !shown(x) || !shown(y) {
-        let mut c = table_call(cpu, bus, get_vram, 0, slot, buffer, 1);
+        // Four PUSH, XOR A, LD D,0, LD E,(IX+4), POP HL, LD IY,1, GET_VRAM
+        // through the table; the two stores through IY; the same again for
+        // PUT_VRAM.
+        c += 114 + TABLE_CALL + vram_body(cpu, bus, get_vram, 0, slot, buffer, 1);
         bus.write(buffer.wrapping_add(1), 0);
         bus.write(buffer.wrapping_add(3), 0x80);
-        c += table_call(cpu, bus, put_vram, 0, slot, buffer, 1);
-        return c + 400;
+        c += 134 + TABLE_CALL + vram_body(cpu, bus, put_vram, 0, slot, buffer, 1);
+        return c;
     }
+    // DEC HL x2, LD A,(HL), CP 0, JP Z; the colour and X for the early clock
+    // or not (with its JP or JR on); the Y, the name, and PUT_VRAM, and the
+    // JR to the RET.
+    c += 36 + if (x >> 8) == 0 { 322 } else { 314 + if shift == 8 { 10 } else { 12 } } + 463 + TABLE_CALL + 12;
     let frame = peek(bus, status);
     let entry = ram16(bus, gfx.wrapping_add(5)).wrapping_add(frame.wrapping_shl(1) as u16);
     let colour = peek(bus, entry);
@@ -929,7 +1121,7 @@ fn sprite(cpu: &mut Z80, bus: &mut ColecoBus, desc: u16, gfx: u16, shift: u16, e
     for (i, v) in [y as u8, x_out, name, colour].into_iter().enumerate() {
         bus.write(buffer.wrapping_add(i as u16), v);
     }
-    table_call(cpu, bus, put_vram, 0, slot, buffer, 1) + 500
+    c + vram_body(cpu, bus, put_vram, 0, slot, buffer, 1)
 }
 
 /// A complex object: each part's status is set from the whole's position
@@ -954,13 +1146,18 @@ fn complex(
     let mut frames = ram16(bus, at);
     let mut offsets = ram16(bus, at.wrapping_add(2));
     let parts = kind >> 4;
-    let mut c = 200;
+    // The frame's lists and the whole's position, the count from the
+    // graphics byte, PUSH BC, PUSH IX.
+    let mut c = 286;
     let mut n = parts;
     let mut list = desc.wrapping_add(4);
     loop {
         let part = ram16(bus, list);
         list = list.wrapping_add(2);
         let st = ram16(bus, part.wrapping_add(2));
+        // The part's status into IY, its frame (BIT 7,(IY), JR Z, or SET),
+        // X and Y through the alternates, and DJNZ.
+        c += 371 + if peek(bus, st) & 0x80 != 0 { 15 } else { 12 } + if n == 1 { 8 } else { 13 };
         let f = peek(bus, frames) | (peek(bus, st) & 0x80);
         bus.write(st, f);
         frames = frames.wrapping_add(1);
@@ -970,18 +1167,21 @@ fn complex(
         let dy = peek(bus, offsets) as u16;
         set_ram16(bus, st.wrapping_add(3), y.wrapping_add(dy));
         offsets = offsets.wrapping_add(1);
-        c += 250;
         n = n.wrapping_sub(1);
         if n == 0 {
             break;
         }
     }
+    // POP IY, LD BC,4, ADD IY,BC, POP DE.
+    c += 49;
     let mut n = parts;
     let mut list = desc.wrapping_add(4);
     loop {
         let part = ram16(bus, list);
         list = list.wrapping_add(2);
-        c += putobj_at(cpu, bus, part, param, budget)? + 150;
+        // The part's descriptor from the list, PUSH IY, PUSH DE, LD B,E,
+        // CALL $1FFA through the table, POP DE, POP IY, DEC D, JR NZ.
+        c += 178 + putobj_at(cpu, bus, part, param, budget)? + if n == 1 { 7 } else { 12 };
         n = n.wrapping_sub(1);
         if n == 0 {
             // It ends on DEC D to zero, with the part list's pointer in IY
@@ -1004,7 +1204,8 @@ pub fn init_writer(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     set_ram16(bus, QUEUE_IN_PTR, at);
     set_ram16(bus, QUEUE_OUT_PTR, at);
     cpu.set_a(0);
-    120
+    // LD (nn),A, LD A,0, two LD (nn),A, three LD (nn),HL.
+    13 + 7 + 26 + 48
 }
 
 /// WRITER (`$1FE8`): draw every queued object, oldest first, with deferral
@@ -1013,7 +1214,9 @@ pub fn writer(cpu: &mut Z80, bus: &mut ColecoBus) -> Option<i32> {
     let f = cpu.f;
     let saved = peek(bus, DEFER);
     bus.write(DEFER, 0);
-    let mut c = 100;
+    // LD A,(nn), PUSH AF, LD A,0, LD (nn),A; at the end the last test (LD
+    // A,(nn), LD HL,nn, CP (HL), JR Z), POP AF, LD (nn),A.
+    let mut c = 44 + 30 + 12 + 10 + 13;
     let mut budget = Budget::new();
     // At most one lap of a 256-entry queue, however its indexes were left.
     for _ in 0..0x100 {
@@ -1024,8 +1227,12 @@ pub fn writer(cpu: &mut Z80, bus: &mut ColecoBus) -> Option<i32> {
         let at = ram16(bus, QUEUE_OUT_PTR);
         let desc = ram16(bus, at);
         let param = peek(bus, at.wrapping_add(2));
-        c += draw_object(cpu, bus, desc, param, &mut budget)? + 200;
+        // The test, JR Z not taken, the entry into IX and B, PUSH HL, CALL
+        // $06E3 and its RET, LD A,(nn), INC A, LD HL,nn, CP (HL), JR NZ, the
+        // next pointer or the wrap, JR.
+        c += 30 + 7 + 98 + 17 + draw_object(cpu, bus, desc, param, &mut budget)? + 10 + 34;
         let next = peek(bus, QUEUE_OUT).wrapping_add(1);
+        c += if next == peek(bus, QUEUE_SIZE) { 81 } else { 63 };
         if next == peek(bus, QUEUE_SIZE) {
             bus.write(QUEUE_OUT, 0);
             let start = ram16(bus, QUEUE_START);

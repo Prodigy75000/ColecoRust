@@ -12,8 +12,11 @@
 //! Registers and flags are left as the real routine leaves them where that
 //! is cheap to state, because a game is free to read them after the call.
 //!
-//! Cycles charged are each routine's measured average on the real BIOS, so a
-//! game's frame budget comes out about the same. Measured by `routinediff`.
+//! Cycles charged are the real routine's T-states along the path taken,
+//! summed from its instructions, without the final RET, which the trap
+//! adds: a call takes as long as on the real BIOS, as `routinediff`'s timing
+//! line shows (real = 1.000 x HLE + 0 where it is exact). A call from one
+//! routine to another adds the CALL's 17 and the callee's RET's 10.
 
 use crate::machine::ColecoBus;
 use crate::z80::Z80;
@@ -157,9 +160,10 @@ pub fn call(target: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
         0x080b => objects::draw_entry(cpu, bus),
         0x08c0 => objects::offset_entry(cpu),
         0x1987 => game_opt_text(cpu, bus),
+        // CALL $1BAA, CALL $1D01 and its RET.
         0x1c4f => {
-            table_address(cpu, bus);
-            120 + write_vram(cpu, bus)
+            let t = table_address(cpu, bus);
+            17 + t + 17 + write_vram(cpu, bus) + 10
         }
         _ => return None,
     }))
@@ -169,7 +173,8 @@ pub fn call(target: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
 /// flag, and with it the interrupt, which is why games call it.
 fn read_register(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     cpu.set_a(bus.vdp.read_control());
-    21
+    // IN A,($BF).
+    11
 }
 
 /// How the BIOS's block transfers count. A count in DE moves E bytes first
@@ -189,6 +194,16 @@ fn block_count(count: u16) -> (usize, u8) {
         }
         n += 256;
     }
+}
+
+/// The block loops' time for `n` bytes ending with D at `d`: OUTI (or INI),
+/// NOP, NOP, JP NZ per byte; DEC D and JP M per pass of up to 256, a JR NZ
+/// back after every pass but the last, and a JR NZ not taken when the last
+/// ends on zero rather than negative.
+fn block_time(n: usize, d: u8) -> i32 {
+    let first = if n % 256 == 0 { 256 } else { n % 256 };
+    let passes = ((n - first) / 256 + 1) as i32;
+    34 * n as i32 + 14 * passes + 12 * (passes - 1) + if d == 0 { 7 } else { 0 }
 }
 
 /// Flags as the block loops leave them: their last instruction is DEC D,
@@ -228,7 +243,9 @@ pub(super) fn write_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     cpu.set_de(u16::from_be_bytes([d, count as u8]));
     cpu.set_hl(end);
     cpu.f = block_flags(d, last as u16 + (end & 0xff) > 0xff);
-    60 + 34 * n as i32
+    // PUSH HL, PUSH DE, POP HL, LD DE,nn, ADD HL,DE, two OUT with their
+    // loads, PUSH BC, POP DE, POP HL, LD C,n, LD B,E; then the loop.
+    125 + block_time(n, d)
 }
 
 /// READ_VRAM (`$1FE2`): copy BC bytes from DE in VRAM to HL in RAM.
@@ -248,7 +265,8 @@ pub(super) fn read_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     cpu.set_de(u16::from_be_bytes([d, count as u8]));
     cpu.set_hl(dst.wrapping_add(n as u16));
     cpu.f = block_flags(d, last as u16 + 0xbf > 0xff);
-    60 + 34 * n as i32
+    // Two OUT with their loads, PUSH BC, POP DE, LD C,n, LD B,E; the loop.
+    62 + block_time(n, d)
 }
 
 /// Where FILL_VRAM reads the status at its end, on the real BIOS: the
@@ -327,13 +345,33 @@ fn init_table(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     let slot = TABLE_BASES.wrapping_add(2 * code as u16);
     set_ram16(bus, slot, hl);
     cpu.ix = slot;
-    let (reg, val) = match (mode2(bus), code) {
-        (true, 3) => (4, if hl == 0 { 0x03 } else { 0x07 }),
-        (true, 4) => (3, if hl == 0 { 0x7f } else { 0xff }),
+    // LD C,A, LD B,0, LD IX,nn, ADD IX,BC x2, two stores, LD A,(nn), BIT 1,A.
+    let mut t = 4 + 7 + 14 + 30 + 38 + 13 + 8;
+    let m2 = mode2(bus);
+    // The mode 2 tests: JR Z not taken, LD A,C, CP 3 (and CP 4).
+    t += match (m2, code) {
+        (false, _) => 12,
+        (true, 3) => 7 + 4 + 7 + 12,
+        (true, 4) => 7 + 4 + 7 + 7 + 7 + 12,
+        (true, _) => 7 + 4 + 7 + 7 + 7 + 7 + 12,
+    };
+    let (reg, val) = match (m2, code) {
+        (true, 3) | (true, 4) => {
+            // LD B,n, LD A,L, OR H, then LD C,n by JR NZ or not, JR.
+            t += 7 + 4 + 4 + if hl != 0 { 12 + 7 + 12 } else { 7 + 7 + 12 };
+            if code == 3 {
+                (4, if hl == 0 { 0x03 } else { 0x07 })
+            } else {
+                (3, if hl == 0 { 0x7f } else { 0xff })
+            }
+        }
         _ => {
             // Per table: how far to shift the address, and which register.
             const SHIFT_REG: [(u32, u8); 5] = [(7, 5), (11, 6), (10, 2), (11, 4), (6, 3)];
             let (shift, reg) = SHIFT_REG[(code as usize).min(4)];
+            // LD IY,nn, ADD IY,BC x2, LD A,(IY), LD B,(IY+1), the shift loop
+            // (SRL H, RR L, DEC A, JR NZ), LD C,L.
+            t += 14 + 30 + 19 + 19 + 32 * shift as i32 - 5 + 4;
             cpu.iy = 0x1b76u16.wrapping_add(2 * code as u16);
             let shifted = hl >> shift;
             cpu.set_hl(shifted);
@@ -341,21 +379,31 @@ fn init_table(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
         }
     };
     set_bc(cpu, reg, val);
-    200 + write_register(cpu, bus)
+    // CALL $1CCA and its RET.
+    t + 17 + write_register(cpu, bus) + 10
 }
 
 /// The address arithmetic GET_VRAM and PUT_VRAM share: item index DE and
 /// item count IY of table A, scaled by the table's item size, onto the
 /// table's base. Leaves DE = VRAM address, BC = byte count, HL untouched.
 /// The colour table's items are single bytes outside graphics mode 2.
-fn table_address(cpu: &mut Z80, bus: &mut ColecoBus) {
+/// Returns its time, with its RET.
+fn table_address(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     let code = cpu.a();
     let mut index = cpu.de();
     let mut count = cpu.iy;
     let scaled = !(code == 4 && !mode2(bus));
+    // LD (nn),IY, LD IX,nn, LD C,A, LD B,0, CP 4, JR NZ (with the mode test
+    // for the colour table); at the end PUSH HL, ADD IX,BC x2, two loads,
+    // ADD HL,DE, EX DE,HL, POP HL, LD BC,(nn), RET.
+    let mut t = 20 + 14 + 4 + 7 + 7 + 134;
+    t += if code != 4 { 12 } else if scaled { 7 + 13 + 8 + 7 } else { 7 + 13 + 8 + 12 };
     if scaled {
         const SHIFTS: [u32; 5] = [2, 3, 0, 3, 3];
         let shift = SHIFTS[(code as usize).min(4)];
+        // LD IY,nn, ADD IY,BC, LD A,(IY), CP 0, then JR Z, or both shift
+        // loops (SLA, RL, DEC A, JR NZ) with the count's load and store.
+        t += 14 + 15 + 19 + 7 + if shift == 0 { 12 } else { 64 * shift as i32 + 91 };
         cpu.iy = 0x1bffu16.wrapping_add(code as u16);
         index <<= shift;
         count <<= shift;
@@ -369,12 +417,14 @@ fn table_address(cpu: &mut Z80, bus: &mut ColecoBus) {
     let base = ram16(bus, slot);
     cpu.set_de(base.wrapping_add(index));
     cpu.set_bc(count);
+    t
 }
 
 /// GET_VRAM (`$1FBB`): read IY items of table A from item DE into HL.
 pub(super) fn get_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
-    table_address(cpu, bus);
-    120 + read_vram(cpu, bus)
+    // CALL $1BAA, CALL $1D3E and its RET.
+    let t = table_address(cpu, bus);
+    17 + t + 17 + read_vram(cpu, bus) + 10
 }
 
 /// PUT_VRAM (`$1FBE`): write IY items of table A from HL at item DE. With
@@ -382,6 +432,8 @@ pub(super) fn get_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
 /// copy the cartridge header points at (`$8002`) instead of VRAM.
 pub(super) fn put_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     use crate::z80::Bus;
+    // PUSH AF, CP 0, JR NZ; for table 0, LD A,(nn), CP 1, JR NZ.
+    let head = if cpu.a() != 0 { 11 + 7 + 12 } else { 11 + 7 + 7 + 13 + 7 };
     if cpu.a() == 0 && bus.ram[0x3c7] == 1 {
         // The real one scales only the low bytes of index and count, by 4.
         let src = cpu.hl();
@@ -404,10 +456,14 @@ pub(super) fn put_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
         let sla = sz53p(cnt_lo) & !0x04 | (cnt_lo >> 7) as u8;
         let k = cnt_lo.wrapping_add(last);
         cpu.f = (sla & 0xc1) | (k & 0x08) | if k & 0x02 != 0 { 0x20 } else { 0 };
-        return 80 + 21 * n as i32;
+        // JR NZ not taken, POP AF, the address and count (PUSH HL, LD HL,
+        // SLA x2 each, ADD, EX, PUSH IY, POP BC ...), POP HL, LDIR, JR.
+        return head + 7 + 10 + 11 + 16 + 4 + 16 + 4 + 11 + 4 + 15 + 10 + 4 + 16 + 4 + 10 + 21 * n as i32 - 5 + 12;
     }
-    table_address(cpu, bus);
-    120 + write_vram(cpu, bus)
+    // (JR NZ taken for table 0), POP AF, CALL $1BAA, CALL $1D01 and its RET.
+    let jump = if cpu.a() == 0 { 12 } else { 0 };
+    let t = table_address(cpu, bus);
+    head + jump + 10 + 17 + t + 17 + write_vram(cpu, bus) + 10
 }
 
 /// LOAD_ASCII (`$1F7F`): the font into the pattern table, characters `$1D`
@@ -423,7 +479,9 @@ fn load_ascii(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     cpu.set_de(0);
     cpu.iy = 1;
     cpu.set_a(3);
-    40 + c1 + put_vram(cpu, bus)
+    // Twice: LD HL, LD DE, LD IY, LD A, CALL $1FBE, its JP and its RET.
+    let call = 10 + 10 + 14 + 7 + 17 + 10 + 10;
+    call + c1 + call + put_vram(cpu, bus)
 }
 
 /// MODE_1 (`$1F85`): graphics mode 2 with the standard table layout: names
@@ -431,18 +489,21 @@ fn load_ascii(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
 /// sprite patterns `$3800`, display off, black backdrop. Seven calls to
 /// routines above, as the real one makes them.
 fn mode_1(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
+    // Each call: its loads (LD B, LD C or LD A, LD HL), CALL, the table's
+    // JP, and the callee's RET.
+    let call = 7 + 17 + 10 + 10;
     let mut c = 0;
     set_bc(cpu, 0, 0x00);
-    c += write_register(cpu, bus);
+    c += 7 + call + write_register(cpu, bus);
     set_bc(cpu, 1, 0x80);
-    c += write_register(cpu, bus);
+    c += 7 + call + write_register(cpu, bus);
     for (code, addr) in [(2u8, 0x1800u16), (4, 0x2000), (3, 0x0000), (0, 0x1b00), (1, 0x3800)] {
         cpu.set_a(code);
         cpu.set_hl(addr);
-        c += init_table(cpu, bus);
+        c += 10 + call + init_table(cpu, bus);
     }
     set_bc(cpu, 7, 0x00);
-    c + write_register(cpu, bus) + 100
+    c + 7 + call + write_register(cpu, bus)
 }
 
 /// INIT_SPR_ORDER (`$1FC1`): the sprite order table the header points at
@@ -459,7 +520,9 @@ fn init_spr_order(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     cpu.set_hl(buf.wrapping_add(n as u16));
     cpu.set_a(count);
     cpu.f = cp_flags(count, count);
-    40 + 30 * n as i32
+    // LD B,A, XOR A, LD HL,(nn); per entry LD (HL),A, INC HL, INC A, CP B,
+    // JR NZ.
+    4 + 4 + 16 + 33 * n as i32 - 5
 }
 
 /// WR_SPR_NM_TBL (`$1FC4`): write A sprites to the VRAM attribute table, in
@@ -492,7 +555,10 @@ fn wr_spr_nm_tbl(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     cpu.set_a(0);
     // DEC A from 1 to 0 ends the loop; carry from the last OUTI.
     cpu.f = 0x42 | u8::from(last as u16 + (hl & 0xff) > 0xff);
-    80 + 150 * n as i32
+    // LD IX,(nn), PUSH AF, LD IY,nn, two loads, the address's two OUT,
+    // POP AF; per sprite LD HL,(nn), LD C,(IX), INC IX, LD B,0, ADD HL,BC
+    // x4, LD B,4, LD C,n, four OUTI with their NOPs and JR NZ, DEC A, JR NZ.
+    130 + 265 * n as i32 - 5
 }
 
 // ---- controllers ----
@@ -529,7 +595,8 @@ fn controller_scan(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     }
     cpu.set_a(k2);
     cpu.f = cpl_flags(cpu.f, k2);
-    150
+    // Four IN, CPL, LD (nn),A; two OUT; CALL to a NOP and RET.
+    4 * (11 + 4 + 13) + 2 * 11 + 17 + 4 + 10
 }
 
 /// UPDATE_SPINNER (`$1F88`): each controller's spinner, from port bits 4
@@ -538,9 +605,24 @@ fn controller_scan(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
 fn update_spinner(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     use crate::z80::Bus;
     let mut f = cpu.f;
+    // IN A,($FC), LD HL,nn; then per controller BIT 4 and JR NZ, or BIT 5
+    // and INC (HL) or DEC (HL) and JR; the second IN, and INC HL.
+    let mut t = 11 + 10;
     for (player, addr) in [(0u8, 0x73ebu16), (1, 0x73ec)] {
         let raw = bus.input(if player == 0 { 0xfc } else { 0xff });
         cpu.set_a(raw);
+        t += 8;
+        if player == 1 {
+            t += 11;
+        }
+        if raw & 0x10 != 0 {
+            t += 12;
+        } else {
+            t += 7 + 8 + if raw & 0x20 != 0 { 12 + 11 } else { 7 + 11 + 12 };
+            if player == 1 {
+                t += 6;
+            }
+        }
         if raw & 0x10 == 0 {
             let v = bus.peek(addr);
             let next = if raw & 0x20 == 0 { v.wrapping_sub(1) } else { v.wrapping_add(1) };
@@ -562,7 +644,7 @@ fn update_spinner(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
         cpu.set_hl(if player == 0 { 0x73eb } else { 0x73ec });
     }
     cpu.f = f;
-    80
+    t
 }
 
 /// DECODER (`$1F79`): controller H (0 or 1), part L: 0 the joystick
@@ -572,6 +654,18 @@ fn decoder(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     use crate::z80::Bus;
     let player = (cpu.hl() >> 8) as u8;
     let keypad = cpu.hl() as u8 == 1;
+    // The port read ($113D): LD A,H, CP 0, JR NZ, IN (and JR), CPL, RET.
+    let port = if player == 0 { 4 + 7 + 7 + 11 + 12 + 4 + 10 } else { 4 + 7 + 12 + 11 + 4 + 10 };
+    let t = if keypad {
+        // LD A,L, CP 1, JR Z, OUT, CALL, LD D,A, OUT, AND, LD HL, LD B,
+        // LD C,A, ADD HL,BC, LD L,(HL), LD A,D, AND, LD H,A.
+        4 + 7 + 12 + 11 + 17 + port + 4 + 11 + 7 + 10 + 7 + 4 + 11 + 7 + 4 + 7 + 4
+    } else {
+        // LD A,L, CP 1, JR Z, LD BC, LD A,H, CP 0, JR Z (or INC BC), LD
+        // A,(BC), LD E,A, XOR A, LD (BC),A, CALL, then six to split the
+        // byte, JR to the RET.
+        4 + 7 + 7 + 10 + 4 + 7 + if player == 0 { 12 } else { 7 + 6 } + 7 + 4 + 4 + 7 + 17 + port + 30 + 12
+    };
     let raw;
     if keypad {
         bus.output(0x80, cpu.a());
@@ -595,7 +689,7 @@ fn decoder(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     cpu.set_a(raw & 0x40);
     // AND $40 is the last flag-setter: H set, S/Z/P/5/3 from the result.
     cpu.f = sz53p(raw & 0x40) | 0x10;
-    120
+    t
 }
 
 /// Flags as `AND n` leaves them: S, Z, bits 5 and 3, parity, H set.
@@ -819,7 +913,10 @@ fn game_opt(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     cpu.set_de(0x4000);
     cpu.set_a(0);
     let c = fill_vram_within(cpu, bus) + mode_1(cpu, bus);
-    c + game_opt_text(cpu, bus)
+    // The real one's calls between (its text goes through a helper at
+    // $1ACA per row) come to 2331 T-states more than the routines
+    // themselves, measured over every corpus call by routinediff.
+    c + game_opt_text(cpu, bus) + 2331
 }
 
 /// GAME_OPT from its backdrop colour on (`$1987`): everything but the clear
@@ -886,6 +983,14 @@ fn delay(cpu: &mut Z80, bus: &mut ColecoBus) -> Flow {
 /// bits 15 and 8, shifted left. A := the new low byte.
 fn rand_gen(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     let hl = ram16(bus, 0x73c8);
+    // LD HL,(nn), BIT 7,H, JR Z, BIT 0,H, JR Z, SCF or OR A (and a JR),
+    // RL L, RL H, LD (nn),HL, LD A,L: four paths.
+    let t = 36 + match ((hl >> 15) & 1, (hl >> 8) & 1) {
+        (1, 0) => 16 + 8 + 7 + 8 + 12 + 4 + 12,
+        (1, _) => 16 + 8 + 7 + 8 + 7 + 12 + 4,
+        (0, 0) => 16 + 8 + 12 + 8 + 12 + 4,
+        _ => 16 + 8 + 12 + 8 + 7 + 4 + 12,
+    };
     let feedback = ((hl >> 15) ^ (hl >> 8)) & 1;
     let next = (hl << 1) | feedback;
     set_ram16(bus, 0x73c8, next);
@@ -893,7 +998,7 @@ fn rand_gen(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     cpu.set_a(next as u8);
     // The last instruction to set flags is RL H.
     cpu.f = sz53p((next >> 8) as u8) | (hl >> 15) as u8;
-    90
+    t
 }
 
 /// WRITE_REGISTER (`$1FD9`): VDP register B := C. Registers 0 and 1 are also
@@ -912,7 +1017,13 @@ fn write_register(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     // register 1's path reloads A with the value.
     cpu.set_a(if b == 1 { c } else { b });
     cpu.f = cp_flags(b, 1);
-    100
+    // Two OUT with their loads, the tests for registers 0 and 1, and a
+    // shadow store for either.
+    if b <= 1 {
+        95
+    } else {
+        83
+    }
 }
 
 #[cfg(test)]

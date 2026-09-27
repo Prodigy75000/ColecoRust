@@ -33,6 +33,11 @@
 //! start. So the registers are carried through every path as the real
 //! driver's instructions leave them, flags included, in `R`.
 //!
+//! **Time is part of it too.** SOUND_MAN and PLAY_SONGS run every frame, so
+//! `R` also counts the Z80 T-states of the real instructions each path runs,
+//! summed per helper from the real driver's code: a call returns after the
+//! same time it took on the real BIOS, as `routinediff` confirms.
+//!
 //! **Special sounds call the cartridge.** A note of type 4, and every frame
 //! of a song so marked, runs a routine in the game. Host code cannot call
 //! guest code and wait, so at those points the driver does what the real one
@@ -70,6 +75,8 @@ struct R {
     l: u8,
     ix: u16,
     iy: u16,
+    /// T-states run so far, the real driver's.
+    t: i32,
 }
 
 impl R {
@@ -77,7 +84,7 @@ impl R {
         let [b, c] = cpu.bc().to_be_bytes();
         let [d, e] = cpu.de().to_be_bytes();
         let [h, l] = cpu.hl().to_be_bytes();
-        R { a: cpu.a(), f: cpu.f, b, c, d, e, h, l, ix: cpu.ix, iy: cpu.iy }
+        R { a: cpu.a(), f: cpu.f, b, c, d, e, h, l, ix: cpu.ix, iy: cpu.iy, t: 0 }
     }
 
     fn store(&self, cpu: &mut Z80) {
@@ -241,6 +248,7 @@ fn set16(bus: &mut ColecoBus, addr: u16, v: u16) {
 /// rotating it left twice; HL is left on the high byte of the area pointer
 /// in the table, DE is the area, BC the scaled number.
 fn area_of(r: &mut R, bus: &mut ColecoBus) {
+    r.t += 16 + 12 + 4 + 7 + 16 + 11 + 7 + 6 + 7 + 11 + 14 + 10;
     let base = ram16(bus, 0x7020).wrapping_sub(2);
     let (c, _) = rlc(r.b);
     let (c, f) = rlc(c);
@@ -280,7 +288,10 @@ pub fn sound_init(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     cpu.set_de(10);
     cpu.set_bc(cpu.bc() & 0x00ff);
     cpu.f = f;
-    120 + 40 * n as i32 + turn_off_sound(cpu, bus)
+    // LD (nn),HL, INC HL x2, the area pointer's load, EX DE,HL, LD E, LD D;
+    // per area LD (HL),n, ADD HL,DE, DJNZ; LD (HL),0, LD HL,nn, four
+    // LD (nn),HL, LD A,n, LD (nn),A; then into TURN_OFF_SOUND.
+    66 + 34 * n as i32 - 5 + 104 + turn_off_sound(cpu, bus)
 }
 
 /// TURN_OFF_SOUND (`$1FD6`): all four channels to full attenuation.
@@ -289,13 +300,16 @@ pub fn turn_off_sound(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
         bus.output(0xff, v);
     }
     cpu.set_a(0xff);
-    60
+    // Four LD A,n and OUT.
+    4 * (7 + 11)
 }
 
 /// Point each channel at the last active area claiming it (`$0295`). IX is
 /// saved and restored around it.
 fn reassign(r: &mut R, bus: &mut ColecoBus) {
     let saved = r.ix;
+    // PUSH IX; LD HL,nn; four LD (nn),HL; LD B,1; CALL $01C1.
+    r.t += 15 + 10 + 64 + 7 + 17;
     r.set_hl(IDLE);
     for ch in 0..4 {
         set16(bus, 0x7022 + 2 * ch, IDLE);
@@ -305,10 +319,23 @@ fn reassign(r: &mut R, bus: &mut ColecoBus) {
     for _ in 0..MAX_AREAS {
         r.a = peek(bus, r.ix);
         r.cp(0);
+        r.t += 19 + 7;
         if r.a == 0 {
+            // JR Z; POP IX; RET.
+            r.t += 12 + 14 + 10;
             break;
         }
         r.cp(0xff);
+        r.t += 7 + 7;
+        if r.a == 0xff {
+            r.t += 12;
+        } else {
+            // JR Z not taken, LD A,(IX), AND, RLCA x3, LD E,A, LD D,0,
+            // LD HL,nn, ADD HL,DE, PUSH IX, POP DE, LD (HL),E, INC HL, LD (HL),D.
+            r.t += 7 + 19 + 7 + 12 + 4 + 7 + 10 + 11 + 15 + 10 + 7 + 6 + 7;
+        }
+        // LD E,10; LD D,0; ADD IX,DE; JR.
+        r.t += 7 + 7 + 15 + 12;
         if r.a != 0xff {
             r.and(0xc0);
             r.rlca();
@@ -331,6 +358,7 @@ fn reassign(r: &mut R, bus: &mut ColecoBus) {
 /// (`$0190`). A and the flags are those of the `SUB 1` on the nibble; Z when
 /// it has just reached zero.
 fn dec_nibble(r: &mut R, bus: &mut ColecoBus) -> bool {
+    r.t += 7 + 18 + 7 + 11 + 18 + 10 + 10;
     let at = r.hl();
     let m = peek(bus, at);
     let lo = m & 0x0f;
@@ -344,6 +372,7 @@ fn dec_nibble(r: &mut R, bus: &mut ColecoBus) -> bool {
 /// Reload the low nibble of `(HL)` from its high nibble (`$01A6`); B is left
 /// holding the high nibble.
 fn reload_nibble(r: &mut R, bus: &mut ColecoBus) {
+    r.t += 7 + 7 + 4 + 16 + 4 + 7 + 10;
     let at = r.hl();
     r.a = peek(bus, at);
     r.and(0xf0);
@@ -362,20 +391,32 @@ fn volume_sweep(r: &mut R, bus: &mut ColecoBus) {
     let ix = r.ix;
     r.a = peek(bus, ix.wrapping_add(8));
     r.cp(0);
+    r.t += 19 + 7;
     if r.a == 0 {
+        r.t += 11;
         return;
     }
+    // RET Z not taken, PUSH IX, POP HL, LD D,0, LD E,9, ADD HL,DE, CALL.
+    r.t += 5 + 15 + 10 + 7 + 7 + 11 + 17;
     r.set_hl(ix);
     r.add_hl(9);
     if !dec_nibble(r, bus) {
+        r.t += 12 + 10;
         return;
     }
+    // JR NZ not taken, CALL $01A6, then DEC HL and CALL $0190.
+    r.t += 7 + 17;
     reload_nibble(r, bus);
+    r.t += 6 + 17;
     r.set_hl(r.hl().wrapping_sub(1));
     if dec_nibble(r, bus) {
+        // JR Z; LD (HL),0; RET.
+        r.t += 12 + 10 + 10;
         bus.write(r.hl(), 0);
         return;
     }
+    // JR Z not taken, the attenuation step, OR $FF, JR, RET.
+    r.t += 7 + 96 + 12 + 10;
     r.a = peek(bus, r.hl());
     r.and(0xf0);
     r.e = r.a;
@@ -403,28 +444,47 @@ fn duration_and_sweep(r: &mut R, bus: &mut ColecoBus) -> bool {
     let ix = r.ix;
     r.a = peek(bus, ix.wrapping_add(7));
     r.cp(0);
+    r.t += 19 + 7;
     if r.a == 0 {
+        // JR NZ not taken, LD A,(IX+5), DEC A.
+        r.t += 7 + 19 + 4;
         let v = peek(bus, ix.wrapping_add(5));
         r.f = dec_flags(r.f, v);
         r.a = v.wrapping_sub(1);
         if r.a == 0 {
+            r.t += 11;
             return false;
         }
+        // RET Z not taken, LD (IX+5),A, RET.
+        r.t += 5 + 19 + 10;
         bus.write(ix.wrapping_add(5), r.a);
         return true;
     }
+    // JR NZ, PUSH IX, POP HL, LD E,6, LD D,0, ADD HL,DE, CALL $0190.
+    r.t += 12 + 15 + 10 + 7 + 7 + 11 + 17;
     r.set_hl(ix);
     r.add_hl(6);
     if !dec_nibble(r, bus) {
+        r.t += 12 + 10;
         return true;
     }
+    // JR NZ not taken, CALL $01A6, DEC HL, LD A,(HL), DEC A.
+    r.t += 7 + 17;
     reload_nibble(r, bus);
+    r.t += 6 + 7 + 4;
     r.set_hl(r.hl().wrapping_sub(1));
     let v = peek(bus, r.hl());
     r.f = dec_flags(r.f, v);
     r.a = v.wrapping_sub(1);
     if r.a == 0 {
+        r.t += 11;
         return false;
+    }
+    // RET Z not taken, LD (HL),A, DEC HL x2, LD A,(IX+7), CALL $01B1 and its
+    // body (7 more for a negative step), INC HL, RES 2,(HL), OR $FF, RET.
+    r.t += 5 + 7 + 12 + 19 + 17 + 81 + 6 + 15 + 7 + 10;
+    if peek(bus, ix.wrapping_add(7)) & 0x80 != 0 {
+        r.t += 2;
     }
     bus.write(r.hl(), r.a);
     r.set_hl(r.hl().wrapping_sub(2));
@@ -455,6 +515,7 @@ enum Step {
 
 /// `$0478`: DE = IY = IX + DE.
 fn ix_plus_de(r: &mut R) {
+    r.t += 17 + 15 + 14 + 15 + 15 + 10 + 10;
     r.f = add16_flags(r.f, r.ix, r.de());
     r.iy = r.ix.wrapping_add(r.de());
     r.set_de(r.iy);
@@ -470,8 +531,10 @@ fn lddr(r: &mut R, bus: &mut ColecoBus) {
         r.set_de(r.de().wrapping_sub(1));
         r.set_bc(r.bc().wrapping_sub(1));
         if r.bc() == 0 {
+            r.t += 16;
             break;
         }
+        r.t += 21;
     }
     let k = r.a.wrapping_add(last);
     r.f = (r.f & 0xc1) | (k & 0x08) | if k & 0x02 != 0 { 0x20 } else { 0 };
@@ -482,6 +545,9 @@ fn lddr(r: &mut R, bus: &mut ColecoBus) {
 /// there for the caller to take back.
 fn next_note(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) -> Step {
     let ix = r.ix;
+    // LD A,(IX), AND, PUSH AF, LD (IX),n, LD L,(IX+1), LD H,(IX+2),
+    // LD A,(HL), LD B,A, BIT 5,A.
+    r.t += 19 + 7 + 11 + 19 + 19 + 19 + 7 + 4 + 8;
     r.a = peek(bus, ix);
     r.and(0x3f);
     push(cpu, bus, r.af());
@@ -493,7 +559,9 @@ fn next_note(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) -> Step {
     r.b = r.a;
     r.f = bit_flags(r.f, 5, r.a);
     if r.a & 0x20 != 0 {
-        // A rest: silent for the low five bits' frames.
+        // A rest: silent for the low five bits' frames. JR Z not taken,
+        // PUSH BC, AND, INC HL, six stores through IX, JP $0461.
+        r.t += 7 + 11 + 7 + 6 + 6 * 19 + 10;
         push(cpu, bus, r.bc());
         r.and(0x1f);
         r.set_hl(ptr.wrapping_add(1));
@@ -506,9 +574,15 @@ fn next_note(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) -> Step {
         return Step::Done;
     }
     r.f = bit_flags(r.f, 4, r.a);
+    // JR Z to here, BIT 4,A.
+    r.t += 12 + 8;
     if r.a & 0x10 != 0 {
         r.f = bit_flags(r.f, 3, r.a);
+        // JR Z not taken, BIT 3,A.
+        r.t += 7 + 8;
         if r.a & 0x08 != 0 {
+            // JR Z not taken, POP BC, CALL $025E; its RET at $039D.
+            r.t += 7 + 10 + 17 + 10;
             // Repeat: start the song again. The real driver pops the song
             // number it pushed into BC and calls PLAY_IT, returning through
             // $039D.
@@ -521,7 +595,9 @@ fn next_note(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) -> Step {
             pop(cpu, bus);
             return Step::Done;
         }
-        // The end of the song: the area stays idle.
+        // The end of the song: the area stays idle. JR Z, LD A,n, PUSH AF,
+        // JP $0461.
+        r.t += 12 + 7 + 11 + 10;
         r.a = 0xff;
         push(cpu, bus, r.af());
         finish_note(cpu, bus, r);
@@ -529,7 +605,13 @@ fn next_note(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) -> Step {
     }
     r.and(0x3c);
     r.cp(4);
+    // JR Z to here, AND, CP.
+    r.t += 12 + 7 + 7;
     if r.a == 4 {
+        // JR NZ not taken, POP IY, PUSH IY, PUSH BC, INC HL, LD E,(HL),
+        // LD (IX+1),E, INC HL, LD D,(HL), LD (IX+2),D, INC HL, PUSH IY,
+        // POP AF, PUSH DE, POP IY, LD DE,nn, PUSH DE, JP (IY).
+        r.t += 7 + 14 + 15 + 11 + 6 + 7 + 19 + 6 + 7 + 19 + 6 + 15 + 10 + 11 + 14 + 10 + 11 + 8;
         // A special: the note is a routine in the game. Run it, then its
         // second entry seven bytes on, then finish at $0461.
         let song_af = pop(cpu, bus);
@@ -554,8 +636,13 @@ fn next_note(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) -> Step {
     r.a = r.b;
     r.and(0x03);
     r.cp(0);
+    // JR NZ to here, PUSH BC, LD A,B, AND, CP.
+    r.t += 12 + 11 + 4 + 7 + 7;
     match r.a {
         0 => {
+            // JR NZ not taken, INC HL x4, two stores, DEC HL, LD DE,nn,
+            // the copy, two stores, JR $0461.
+            r.t += 7 + 24 + 38 + 6 + 10 + 10 + 38 + 12;
             r.set_hl(ptr.wrapping_add(4));
             set16(bus, ix.wrapping_add(1), r.hl());
             r.set_hl(r.hl().wrapping_sub(1));
@@ -567,6 +654,9 @@ fn next_note(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) -> Step {
             bus.write(ix.wrapping_add(8), 0);
         }
         1 => {
+            // JR NZ, CP, JR NZ not taken, LD E, LD D, ADD HL,DE, two
+            // stores, DEC HL, INC E, LD BC,nn, a store, JR.
+            r.t += 12 + 7 + 7 + 7 + 7 + 11 + 38 + 6 + 4 + 10 + 19 + 12;
             r.cp(1);
             r.set_hl(ptr);
             r.add_hl(6);
@@ -580,6 +670,11 @@ fn next_note(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) -> Step {
             bus.write(ix.wrapping_add(8), 0);
         }
         2 => {
+            // JR NZ, CP, JR NZ, CP, JR NZ not taken, LD E, LD D, ADD HL,DE,
+            // POP AF, PUSH AF, AND, JR NZ (or DEC HL), two stores, DEC HL,
+            // LD E,9, LD BC,nn, LD A,0, LD (DE),A, DEC DE x2, LD C,3, JR.
+            r.t += 12 + 7 + 12 + 7 + 7 + 7 + 7 + 11 + 10 + 11 + 7 + 38 + 6 + 7 + 10 + 7 + 7 + 12 + 7 + 12;
+            r.t += if peek(bus, ptr) & 0xc0 != 0 { 12 } else { 7 + 6 };
             r.cp(1);
             r.cp(2);
             r.set_hl(ptr);
@@ -605,6 +700,10 @@ fn next_note(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) -> Step {
             lddr(r, bus);
         }
         _ => {
+            // JR NZ, CP, JR NZ, CP, JR NZ, LD E, LD D, ADD HL,DE, two
+            // stores, DEC HL, PUSH IX, POP IY, LD E,9, ADD IY,DE, PUSH IY,
+            // POP DE, LD BC,nn.
+            r.t += 12 + 7 + 12 + 7 + 12 + 7 + 7 + 11 + 38 + 6 + 15 + 14 + 7 + 15 + 15 + 10 + 10;
             r.cp(1);
             r.cp(2);
             r.set_hl(ptr);
@@ -628,6 +727,8 @@ fn next_note(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) -> Step {
 /// or `$3E` for a special, unless the song ended. Pops the two values
 /// next_note pushed: the note header as AF, the song number as BC.
 fn finish_note(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) {
+    // PUSH IX, POP HL, POP AF, POP BC, CP $FF.
+    r.t += 15 + 10 + 10 + 10 + 7;
     r.set_hl(r.ix);
     let v = pop(cpu, bus);
     r.set_af(v);
@@ -635,8 +736,13 @@ fn finish_note(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) {
     r.set_bc(v);
     r.cp(0xff);
     if r.a == 0xff {
+        r.t += 11;
         return;
     }
+    // RET Z not taken, LD D,A, AND, CP, JR NZ (or LD B,n), LD A,D, AND,
+    // OR B, LD (HL),A, RET.
+    r.t += 5 + 4 + 7 + 7 + 4 + 7 + 4 + 7 + 10;
+    r.t += if r.a & 0x3f == 4 { 7 + 7 } else { 12 };
     r.d = r.a;
     r.and(0x3f);
     r.cp(4);
@@ -653,6 +759,8 @@ fn finish_note(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) {
 /// point its area at the start of its note list, start the first note, and
 /// reassign the channels.
 fn play_it_song(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) -> Step {
+    // PUSH BC, CALL $01C1, LD A,(IX), AND, POP BC, CP B.
+    r.t += 11 + 17 + 19 + 7 + 10 + 4;
     push(cpu, bus, r.bc());
     area_of(r, bus);
     r.a = peek(bus, r.ix);
@@ -661,8 +769,12 @@ fn play_it_song(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) -> Step {
     r.set_bc(v);
     r.cp(r.b);
     if r.a == r.b {
+        r.t += 11;
         return Step::Done;
     }
+    // RET Z not taken, LD (IX),B, DEC HL x2, LD D,(HL), DEC HL, LD E,(HL),
+    // two stores, CALL $035F; then CALL $0295 and RET.
+    r.t += 5 + 19 + 12 + 7 + 6 + 7 + 38 + 17 + 17 + 10;
     bus.write(r.ix, r.b);
     let at = r.hl().wrapping_sub(2);
     r.d = peek(bus, at);
@@ -682,11 +794,12 @@ fn play_it_song(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) -> Step {
 pub fn play_it(cpu: &mut Z80, bus: &mut ColecoBus) -> Flow {
     let mut r = R::load(cpu);
     match play_it_song(cpu, bus, &mut r) {
+        // The trap's RET is the routine's last, already counted.
         Step::Done => {
             r.store(cpu);
-            Flow::Ret(250)
+            Flow::Ret(r.t - 10)
         }
-        Step::Suspended => Flow::Jump(250),
+        Step::Suspended => Flow::Jump(r.t),
     }
 }
 
@@ -694,64 +807,97 @@ pub fn play_it(cpu: &mut Z80, bus: &mut ColecoBus) -> Flow {
 /// duration, and the next note when one ends.
 pub fn sound_man(cpu: &mut Z80, bus: &mut ColecoBus) -> Flow {
     let mut r = R::load(cpu);
+    // LD B,1; CALL $01C1.
+    r.t += 7 + 17;
     r.b = 1;
     area_of(&mut r, bus);
-    sound_man_loop(cpu, bus, r, 60)
+    sound_man_loop(cpu, bus, r)
 }
 
 /// SOUND_MAN's loop from area IX (`$0284`).
-fn sound_man_loop(cpu: &mut Z80, bus: &mut ColecoBus, mut r: R, mut cycles: i32) -> Flow {
+fn sound_man_loop(cpu: &mut Z80, bus: &mut ColecoBus, mut r: R) -> Flow {
     for _ in 0..MAX_AREAS {
         r.a = 0;
         let v = peek(bus, r.ix);
         r.cp(v);
+        // LD A,0; CP (IX).
+        r.t += 7 + 19;
         if v == 0 {
+            // RET Z, less the trap's RET.
+            r.t += 11 - 10;
             break;
         }
-        cycles += 120;
+        // RET Z not taken, CALL $02D6.
+        r.t += 5 + 17;
         push(cpu, bus, 0x028d);
         if let Step::Suspended = area_frame(cpu, bus, &mut r) {
-            return Flow::Jump(cycles);
+            return Flow::Jump(r.t);
         }
         pop(cpu, bus);
+        // LD E,10; LD D,0; ADD IX,DE; JR.
+        r.t += 7 + 7 + 15 + 12;
         r.add_ix(10);
     }
     r.store(cpu);
-    Flow::Ret(cycles)
+    Flow::Ret(r.t)
 }
 
 /// One area's frame (`$02D6`), called with `$028D` pushed.
 fn area_frame(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) -> Step {
     let ix = r.ix;
     // `$01E9`: the area's song, and for a special its routine in HL.
+    // CALL, LD A,(IX), CP $FF.
+    r.t += 17 + 19 + 7;
     r.a = peek(bus, ix);
     r.cp(0xff);
     if r.a != 0xff {
+        // RET Z not taken, AND, CP $3E.
+        r.t += 5 + 7 + 7;
         r.and(0x3f);
         r.cp(0x3e);
         if r.a == 0x3e {
+            // RET NZ not taken, PUSH IX, POP HL, INC HL, LD E,(HL),
+            // INC HL, LD D,(HL), EX DE,HL, RET.
+            r.t += 5 + 15 + 10 + 6 + 7 + 6 + 7 + 4 + 10;
             let routine = ram16(bus, ix.wrapping_add(1));
             r.set_de(ix.wrapping_add(2));
             r.set_hl(routine);
+        } else {
+            r.t += 11;
         }
+    } else {
+        r.t += 11;
     }
     r.cp(0xff);
+    // CP $FF.
+    r.t += 7;
     if r.a == 0xff {
+        r.t += 11;
         return Step::Done;
     }
     r.cp(0x3e);
+    // RET Z not taken, CP $3E.
+    r.t += 5 + 7;
     if r.a == 0x3e {
         // A special's frame: its routine's second entry, returning to the
-        // loop at $028D.
+        // loop at $028D. JR NZ not taken, LD E, LD D, ADD HL,DE, JP (HL).
+        r.t += 7 + 7 + 7 + 11 + 4;
         r.add_hl(7);
         r.store(cpu);
         cpu.pc = r.hl();
         return Step::Suspended;
     }
+    // JR NZ, CALL $012F.
+    r.t += 12 + 17;
     volume_sweep(r, bus);
+    r.t += 17;
     if duration_and_sweep(r, bus) {
+        // JR NZ; RET.
+        r.t += 12 + 10;
         return Step::Done;
     }
+    // JR NZ not taken, LD A,(IX), PUSH AF, CALL $035F.
+    r.t += 7 + 19 + 11 + 17;
     r.a = peek(bus, ix);
     push(cpu, bus, r.af());
     push(cpu, bus, 0x02f5);
@@ -760,6 +906,8 @@ fn area_frame(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) -> Step {
     }
     pop(cpu, bus);
     area_tail(cpu, bus, r);
+    // RET.
+    r.t += 10;
     Step::Done
 }
 
@@ -770,8 +918,14 @@ fn area_tail(cpu: &mut Z80, bus: &mut ColecoBus, r: &mut R) {
     r.set_bc(v);
     r.a = peek(bus, r.ix);
     r.cp(r.b);
+    // POP BC, LD A,(IX), CP B.
+    r.t += 10 + 19 + 4;
     if r.a != r.b {
+        // JR Z not taken, CALL $0295.
+        r.t += 7 + 17;
         reassign(r, bus);
+    } else {
+        r.t += 12;
     }
 }
 
@@ -782,23 +936,29 @@ pub fn resume(pc: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
     let flow = match pc {
         // PLAY_IT, after its first note: reassign and return.
         0x027b => {
+            // CALL $0295; RET (the trap's).
+            r.t += 17;
             reassign(&mut r, bus);
-            Flow::Ret(80)
+            Flow::Ret(r.t)
         }
         // SOUND_MAN's loop, after an area: the next area.
         0x028d => {
+            r.t += 7 + 7 + 15 + 12;
             r.add_ix(10);
-            return Some(sound_man_loop(cpu, bus, r, 60));
+            return Some(sound_man_loop(cpu, bus, r));
         }
-        // SOUND_MAN, after starting a note: the reassign check.
+        // SOUND_MAN, after starting a note: the reassign check; its RET is
+        // the trap's.
         0x02f5 => {
             area_tail(cpu, bus, &mut r);
-            Flow::Ret(40)
+            Flow::Ret(r.t)
         }
         // next_note's repeat, after PLAY_IT: return.
-        0x039d => Flow::Ret(10),
-        // A special note's first entry has returned: now its second.
+        0x039d => Flow::Ret(0),
+        // A special note's first entry has returned: now its second. LD D,0,
+        // LD E,7, ADD IY,DE, LD DE,nn, PUSH DE, JP (IY).
         0x03c6 => {
+            r.t += 7 + 7 + 15 + 10 + 11 + 8;
             r.set_de(7);
             r.f = add16_flags(r.f, r.iy, 7);
             r.iy = r.iy.wrapping_add(7);
@@ -806,12 +966,13 @@ pub fn resume(pc: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
             push(cpu, bus, 0x0461);
             r.store(cpu);
             cpu.pc = r.iy;
-            return Some(Flow::Jump(40));
+            return Some(Flow::Jump(r.t));
         }
-        // A special note's second entry has returned: finish the note.
+        // A special note's second entry has returned: finish the note. Its
+        // RET is counted in finish_note and made by the trap.
         0x0461 => {
             finish_note(cpu, bus, &mut r);
-            Flow::Ret(40)
+            Flow::Ret(r.t - 10)
         }
         _ => return None,
     };
@@ -823,6 +984,10 @@ pub fn resume(pc: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
 /// its low nibble when C's bit 4 is clear (the noise control), with C's
 /// command bits.
 fn out_attenuation(r: &mut R, bus: &mut ColecoBus) {
+    // CALL, LD A,(IX+4), BIT 4,C, JR Z, AND, OR C, OUT, RET; with the
+    // rotation, JR Z not taken and four RRCA.
+    r.t += 17 + 19 + 8 + 7 + 4 + 11 + 10;
+    r.t += if r.c & 0x10 != 0 { 7 + 16 } else { 12 };
     r.a = peek(bus, r.ix.wrapping_add(4));
     r.f = bit_flags(r.f, 4, r.c);
     if r.c & 0x10 != 0 {
@@ -838,6 +1003,9 @@ fn out_attenuation(r: &mut R, bus: &mut ColecoBus) {
 /// A tone channel's frequency onto the chip (`$0175`), in two bytes with D's
 /// command bits on the first.
 fn out_frequency(r: &mut R, bus: &mut ColecoBus) {
+    // CALL; LD A,(IX+3), AND, OR D, OUT; LD A,(IX+3), AND, LD D,A,
+    // LD A,(IX+4), AND, OR D, RRCA x4, OUT; RET.
+    r.t += 17 + 19 + 7 + 4 + 11 + 19 + 7 + 4 + 19 + 7 + 4 + 16 + 11 + 10;
     let (lo, hi) = (peek(bus, r.ix.wrapping_add(3)), peek(bus, r.ix.wrapping_add(4)));
     r.a = lo;
     r.and(0x0f);
@@ -862,6 +1030,9 @@ pub fn play_songs(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     let mut r = R::load(cpu);
     let tones = [(0x9fu8, 0x90u8, 0x80u8, 0x7024u16), (0xbf, 0xb0, 0xa0, 0x7026), (0xdf, 0xd0, 0xc0, 0x7028)];
     for (silence, att, freq, ptr) in tones {
+        // LD A,n, LD C,n, LD D,n, LD IX,(nn), CALL $034E; there LD E,(IX),
+        // INC E, and JR NZ, then RET.
+        r.t += 7 + 7 + 7 + 20 + 17 + 19 + 4 + 10;
         r.a = silence;
         r.c = att;
         r.d = freq;
@@ -870,12 +1041,17 @@ pub fn play_songs(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
         r.f = inc_flags(r.f, v);
         r.e = v.wrapping_add(1);
         if r.e == 0 {
+            // JR NZ not taken, OUT, JR.
+            r.t += 7 + 11 + 12;
             bus.output(0xff, r.a);
         } else {
+            r.t += 12;
             out_attenuation(&mut r, bus);
             out_frequency(&mut r, bus);
         }
     }
+    // LD A,n, LD C,n, LD IX,(nn), LD E,(IX), INC E.
+    r.t += 7 + 7 + 20 + 19 + 4;
     r.a = 0xff;
     r.c = 0xf0;
     r.ix = ram16(bus, 0x7022);
@@ -883,22 +1059,32 @@ pub fn play_songs(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     r.f = inc_flags(r.f, v);
     r.e = v.wrapping_add(1);
     if r.e == 0 {
+        // JR NZ not taken, OUT, JR to the RET (the trap's).
+        r.t += 7 + 11 + 12;
         bus.output(0xff, r.a);
     } else {
+        // JR NZ, then after the attenuation LD A,(IX+4), AND, LD HL,nn,
+        // CP (HL), and JR Z either way.
+        r.t += 12;
         out_attenuation(&mut r, bus);
+        r.t += 19 + 7 + 10 + 7;
         r.a = peek(bus, r.ix.wrapping_add(4));
         r.and(0x0f);
         r.set_hl(0x702a);
         let last = peek(bus, 0x702a);
         r.cp(last);
         if r.a != last {
+            // JR Z not taken, LD (HL),A, LD C,n.
+            r.t += 7 + 7 + 7;
             bus.write(0x702a, r.a);
             r.c = 0xe0;
             out_attenuation(&mut r, bus);
+        } else {
+            r.t += 12;
         }
     }
     r.store(cpu);
-    400
+    r.t
 }
 
 #[cfg(test)]
@@ -959,7 +1145,7 @@ mod tests {
         for v in 0..=255u8 {
             for f in [0x00u8, 0xff] {
                 let (za, zf, _) = run(&[0x07], v, f, 0);
-                let mut r = R { a: v, f, b: 0, c: 0, d: 0, e: 0, h: 0, l: 0, ix: 0, iy: 0 };
+                let mut r = R { a: v, f, b: 0, c: 0, d: 0, e: 0, h: 0, l: 0, ix: 0, iy: 0, t: 0 };
                 r.rlca();
                 assert_eq!((r.a, r.f), (za, zf), "RLCA {v:02X}");
             }

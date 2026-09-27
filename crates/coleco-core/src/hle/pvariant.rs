@@ -67,20 +67,34 @@ pub fn is_entry(pc: u16) -> bool {
 fn gather(cpu: &mut Z80, bus: &mut ColecoBus, e: &Entry) -> i32 {
     let mut words = ram16(bus, cpu.sp);
     let mut dest = e.dest;
-    let mut c = 150;
-    for &size in e.params {
+    // The entry's LD BC,nn, LD DE,nn and CALL; the parser's POP HL, EX
+    // (SP),HL, PUSH HL, the count's load, EX (SP),HL, PUSH DE.
+    let mut c = 10 + 10 + 17 + 10 + 19 + 11 + 7 + 4 + 6 + 7 + 6 + 4 + 19 + 11;
+    let count = e.params.len();
+    for (k, &size) in e.params.iter().enumerate() {
         let mut ptr = ram16(bus, words);
         words = words.wrapping_add(2);
+        // The word, PUSH HL, LD A,E, OR D, JP NZ; then INC BC, LD A,(BC),
+        // RLCA, JP NC.
+        c += 7 + 6 + 7 + 6 + 11 + 4 + 4 + 10 + 6 + 7 + 4 + 10;
         if ptr == 0 {
+            // POP HL, the variable's address, PUSH HL, EX DE,HL, its word.
+            c += 10 + 7 + 6 + 7 + 6 + 11 + 4 + 7 + 6 + 7;
             let var = ram16(bus, words);
             words = words.wrapping_add(2);
             ptr = ram16(bus, var);
         }
         if size & 0x8000 != 0 {
+            // INC BC, POP HL, EX (SP),HL, the pointer stored, INC HL x2.
+            c += 6 + 10 + 19 + 7 + 6 + 7 + 6;
             set_ram16(bus, dest, ptr);
             dest = dest.wrapping_add(2);
-            c += 200;
         } else {
+            // POP HL, EX (SP),HL, PUSH HL, RRCA, LD H,A, DEC BC, LD A,(BC),
+            // LD L,A, EX (SP),HL, INC BC x2; per byte LD A,(DE), LD (HL),A,
+            // INC HL, INC DE, EX (SP),HL, DEC HL, XOR A, CP L, JP NZ, then
+            // EX (SP),HL and JP back, or for the last CP H, JP Z, POP HL, JP.
+            c += 10 + 19 + 11 + 4 + 4 + 6 + 7 + 4 + 19 + 12;
             // DEC HL; test for zero: a size of 0 copies 65536 bytes.
             let n = if size == 0 { 0x10000 } else { size as u32 };
             for i in 0..n {
@@ -88,9 +102,17 @@ fn gather(cpu: &mut Z80, bus: &mut ColecoBus, e: &Entry) -> i32 {
                 bus.write(dest, v);
                 dest = dest.wrapping_add(1);
             }
-            c += 200 + 70 * n as i32;
+            c += 98 * (n as i32 - 1) + 103;
+        }
+        // POP DE, EX (SP),HL, DEC HL, XOR A, CP H, JP NZ, CP L, JP Z; then
+        // for another parameter EX (SP),HL, PUSH HL, EX DE,HL, JP.
+        c += 10 + 19 + 6 + 4 + 4 + 10 + 4 + 10;
+        if k + 1 < count {
+            c += 19 + 11 + 4 + 10;
         }
     }
+    // POP HL, EX DE,HL, EX (SP),HL, JP (HL).
+    c += 10 + 4 + 19 + 4;
     set_ram16(bus, cpu.sp, words);
     cpu.set_a(0);
     cpu.f = 0x42;
@@ -101,7 +123,24 @@ fn gather(cpu: &mut Z80, bus: &mut ColecoBus, e: &Entry) -> i32 {
 }
 
 /// Load the registers the ordinary routine takes, as each entry does.
-fn load(cpu: &mut Z80, bus: &mut ColecoBus, at: u16) {
+/// Returns the loads' time.
+fn load(cpu: &mut Z80, bus: &mut ColecoBus, at: u16) -> i32 {
+    let t = match at {
+        0x0203 => 13 + 4 + 16,
+        0x0251 => 13 + 4,
+        // LD HL,(nn), LD E,(HL), INC HL, LD D,(HL), EX DE,HL, LD A,(nn),
+        // CP 0, and JR Z to OR A, or SCF and JR.
+        0x0488 => {
+            16 + 7 + 6 + 7 + 4 + 13 + 7 + if bus.peek(0x73bc) == 0 { 12 + 4 } else { 7 + 4 + 12 }
+        }
+        0x06c7 => 20 + 13 + 4,
+        0x0655 | 0x1b0e | 0x1044 => 13 + 16,
+        0x0f9a => 16 + 20,
+        0x0fb8 | 0x10bf | 0x1c5a | 0x1c76 => 13,
+        0x1b8c | 0x1c10 => 13 + 20 + 20 + 16,
+        0x1cbc => 16 + 4 + 4,
+        _ => 16 + 20 + 20,
+    };
     let byte = |bus: &mut ColecoBus, a: u16| bus.peek(a);
     match at {
         // B, and HL for SOUND_INIT.
@@ -175,14 +214,15 @@ fn load(cpu: &mut Z80, bus: &mut ColecoBus, at: u16) {
             cpu.set_bc(ram16(bus, 0x73be));
         }
     }
+    t
 }
 
 /// A P entry: gather, load, and run the ordinary routine. `None` when that
 /// routine is not written.
 pub fn run(pc: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
     let e = ENTRIES.iter().find(|e| e.at == pc)?;
-    let c = gather(cpu, bus, e) + 40;
-    load(cpu, bus, e.at);
+    let c = gather(cpu, bus, e);
+    let c = c + load(cpu, bus, e.at);
     Some(match call(e.routine, cpu, bus)? {
         Flow::Ret(r) => Flow::Ret(r + c),
         Flow::Jump(r) => Flow::Jump(r + c),
@@ -191,7 +231,6 @@ pub fn run(pc: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::machine::{Coleco, Firmware};
 
     /// WRITE_VRAMP from a cartridge: `CALL $1FA9` and three words after it,
