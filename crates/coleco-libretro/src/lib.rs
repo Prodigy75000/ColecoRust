@@ -18,23 +18,24 @@
 //! # Controls
 //!
 //! A ColecoVision controller is a joystick, two fire buttons and a twelve-key
-//! keypad. A RetroPad has no keypad, so the keys most games need sit on the
-//! spare buttons, and a keyboard, when the frontend has one, reaches all twelve:
+//! keypad. This is **Gearcoleco's scheme, exactly**, because Trophy Hub's
+//! on-screen ColecoVision keypad (`ColecoVisionKeypadPanel.kt`) already sends
+//! it; a different map would make a tap on "1" arrive as another key. A
+//! RetroPad has ten spare button ids for twelve keys, so 9 and 0 ride the left
+//! analog stick, pressed as full positive deflection:
 //!
 //! | ColecoVision | RetroPad | Keyboard |
 //! |---|---|---|
 //! | joystick | D-pad | |
-//! | left fire | B | |
-//! | right fire | A | |
-//! | keypad 1, 2 | START, SELECT | 1, 2 |
-//! | keypad 3, 4 | X, Y | 3, 4 |
-//! | keypad `*`, `#` | L, R | `*` (or keypad `*`), `#` |
+//! | left fire, right fire | B, A | |
+//! | keypad 1, 2, 3, 4 | Y, X, L, R | 1 to 4 |
 //! | keypad 5, 6, 7, 8 | L2, R2, L3, R3 | 5 to 8 |
-//! | keypad 9, 0 | | 9, 0 |
+//! | keypad 9 | left stick Y, +deflection | 9 |
+//! | keypad 0 | left stick X, +deflection | 0 |
+//! | keypad `*`, `#` | START, SELECT | `*`, `#` |
 //!
-//! START is keypad 1 because "press 1" is how nearly every game in the corpus
-//! starts ("skill 1, one player"). When two keypad buttons are held, the lower
-//! key in the table wins.
+//! My first map put keypad 1 on START; the Android agent caught it before
+//! any device ran it. When two keys are held, the first in the table wins.
 
 #![allow(clippy::missing_safety_doc)]
 
@@ -59,6 +60,14 @@ const RETRO_MEMDESC_SYSTEM_RAM: u64 = 1 << 2;
 
 const RETRO_DEVICE_JOYPAD: c_uint = 1;
 const RETRO_DEVICE_KEYBOARD: c_uint = 3;
+const RETRO_DEVICE_ANALOG: c_uint = 5;
+/// Left stick, and its two axes.
+const ANALOG_LEFT: c_uint = 0;
+const AXIS_X: c_uint = 0;
+const AXIS_Y: c_uint = 1;
+/// A stick axis past half of full positive deflection counts as pressed. The
+/// app sends +0x7FFF for a press and 0 for a release.
+const ANALOG_PRESSED: i16 = 0x4000;
 
 // libretro's joypad ids, in its own order.
 const JOY_B: c_uint = 0;
@@ -79,19 +88,22 @@ const JOY_L3: c_uint = 14;
 const JOY_R3: c_uint = 15;
 
 /// Keypad keys on RetroPad buttons, in priority order: key numbers are 0-9,
-/// 10 for `*`, 11 for `#`.
+/// 10 for `*`, 11 for `#`. Gearcoleco's, and so Trophy Hub's panel's.
 const KEYPAD_BUTTONS: [(c_uint, u8); 10] = [
-    (JOY_START, 1),
-    (JOY_SELECT, 2),
-    (JOY_X, 3),
-    (JOY_Y, 4),
-    (JOY_L, 10),
-    (JOY_R, 11),
+    (JOY_Y, 1),
+    (JOY_X, 2),
+    (JOY_L, 3),
+    (JOY_R, 4),
     (JOY_L2, 5),
     (JOY_R2, 6),
     (JOY_L3, 7),
     (JOY_R3, 8),
+    (JOY_START, 10),
+    (JOY_SELECT, 11),
 ];
+
+/// Keypad keys on left-stick axes: 9 on Y, 0 on X.
+const KEYPAD_AXES: [(c_uint, u8); 2] = [(AXIS_Y, 9), (AXIS_X, 0)];
 
 /// libretro keyboard codes (`retro_key`): '0'-'9' are their ASCII codes, `*`
 /// on the numeric keypad is 268, and `#` has no key of its own, so it is
@@ -327,19 +339,28 @@ unsafe fn set_input_descriptors(env: EnvironmentFn) {
             (JOY_RIGHT, c"Right"),
             (JOY_B, c"Left fire"),
             (JOY_A, c"Right fire"),
-            (JOY_START, c"Keypad 1"),
-            (JOY_SELECT, c"Keypad 2"),
-            (JOY_X, c"Keypad 3"),
-            (JOY_Y, c"Keypad 4"),
-            (JOY_L, c"Keypad *"),
-            (JOY_R, c"Keypad #"),
+            (JOY_Y, c"Keypad 1"),
+            (JOY_X, c"Keypad 2"),
+            (JOY_L, c"Keypad 3"),
+            (JOY_R, c"Keypad 4"),
             (JOY_L2, c"Keypad 5"),
             (JOY_R2, c"Keypad 6"),
             (JOY_L3, c"Keypad 7"),
             (JOY_R3, c"Keypad 8"),
+            (JOY_START, c"Keypad *"),
+            (JOY_SELECT, c"Keypad #"),
         ];
         for (id, name) in named {
             d.push(RetroInputDescriptor { port, device: RETRO_DEVICE_JOYPAD, index: 0, id, description: name.as_ptr() });
+        }
+        for (axis, name) in [(AXIS_Y, c"Keypad 9"), (AXIS_X, c"Keypad 0")] {
+            d.push(RetroInputDescriptor {
+                port,
+                device: RETRO_DEVICE_ANALOG,
+                index: ANALOG_LEFT,
+                id: axis,
+                description: name.as_ptr(),
+            });
         }
     }
     d.push(RetroInputDescriptor { port: 0, device: 0, index: 0, id: 0, description: std::ptr::null() });
@@ -385,6 +406,12 @@ pub extern "C" fn retro_get_region() -> c_uint {
 unsafe fn read_pad(state: InputStateFn, port: c_uint) -> Pad {
     let held = |id| state(port, RETRO_DEVICE_JOYPAD, 0, id) != 0;
     let mut key = KEYPAD_BUTTONS.iter().find(|&&(id, _)| held(id)).map(|&(_, k)| k);
+    if key.is_none() {
+        key = KEYPAD_AXES
+            .iter()
+            .find(|&&(axis, _)| state(port, RETRO_DEVICE_ANALOG, ANALOG_LEFT, axis) > ANALOG_PRESSED)
+            .map(|&(_, k)| k);
+    }
     if port == 0 && key.is_none() {
         key = KEYBOARD.iter().find(|&&(code, _)| state(0, RETRO_DEVICE_KEYBOARD, 0, code) != 0).map(|&(_, k)| k);
     }
@@ -491,7 +518,9 @@ mod tests {
     static mut LAST_DIMS: (c_uint, c_uint, usize) = (0, 0, 0);
     static mut AUDIO_FRAMES: usize = 0;
     static mut MAP_START: usize = 0;
-    static mut PRESS_START: bool = false;
+    /// What the fake frontend holds: a joypad id, or an analog axis at full
+    /// positive deflection (id + 100), or nothing (-1).
+    static mut HELD: i32 = -1;
 
     unsafe extern "C" fn env(cmd: c_uint, data: *mut c_void) -> bool {
         match cmd {
@@ -516,8 +545,12 @@ mod tests {
         frames
     }
     unsafe extern "C" fn poll() {}
-    unsafe extern "C" fn input(_port: c_uint, device: c_uint, _index: c_uint, id: c_uint) -> i16 {
-        i16::from(device == RETRO_DEVICE_JOYPAD && id == JOY_START && PRESS_START)
+    unsafe extern "C" fn input(_port: c_uint, device: c_uint, index: c_uint, id: c_uint) -> i16 {
+        match device {
+            RETRO_DEVICE_JOYPAD => i16::from(HELD == id as i32),
+            RETRO_DEVICE_ANALOG if index == ANALOG_LEFT && HELD == 100 + id as i32 => 0x7fff,
+            _ => 0,
+        }
     }
 
     /// A cartridge that puts the keypad key on port 1 into RAM every frame:
@@ -570,19 +603,40 @@ mod tests {
         }
     }
 
-    /// START on the RetroPad is keypad 1: the cartridge reads the keypad and
-    /// sees key 1's code.
+    /// Every one of the twelve keys, sent the way Trophy Hub's on-screen
+    /// keypad sends it (Gearcoleco's scheme), reaches the cartridge as that
+    /// key's hardware code. Written as the app's table, not a restatement of
+    /// `KEYPAD_BUTTONS`, so a shifted map fails: the first map put keypad 1 on
+    /// START, and this test fails for it.
     #[test]
-    fn start_is_keypad_1() {
+    fn the_twelve_keys_match_the_apps_keypad_panel() {
         let _g = SERIAL.lock().unwrap();
+        // (what the panel sends, key), from the Android agent's table.
+        let panel: [(i32, u8); 12] = [
+            (1, 1),         // Y
+            (9, 2),         // X
+            (10, 3),        // L
+            (11, 4),        // R
+            (12, 5),        // L2
+            (13, 6),        // R2
+            (14, 7),        // L3
+            (15, 8),        // R3
+            (100 + 1, 9),   // left stick Y
+            (100, 0),       // left stick X
+            (3, 10),        // START is *
+            (2, 11),        // SELECT is #
+        ];
+        // The keypad's four-bit codes, active low, for keys 0-9, *, #.
+        let codes = [0x0a, 0x0d, 0x07, 0x0c, 0x02, 0x03, 0x0e, 0x05, 0x01, 0x0b, 0x09, 0x06];
         unsafe {
             load();
-            PRESS_START = true;
-            retro_run();
-            PRESS_START = false;
             let ram = retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM) as *const u8;
-            // Key 1's code, active low, with the right fire released.
-            assert_eq!(*ram & 0x0f, 0x0d);
+            for (sent, key) in panel {
+                HELD = sent;
+                retro_run();
+                assert_eq!(*ram & 0x0f, codes[key as usize], "panel input {sent} should be key {key}");
+            }
+            HELD = -1;
             retro_run();
             assert_eq!(*ram & 0x0f, 0x0f, "released");
             retro_unload_game();
