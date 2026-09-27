@@ -1,0 +1,40 @@
+/target
+/target-alt
+/target-*/
+
+# Console firmware. The 8 KB ColecoVision BIOS is copyrighted code and can
+# never be committed, in any revision.
+#
+# The project goal is that you should never need one: the HLE boots a cartridge
+# with no firmware present. A real dump is a comparison ORACLE for development,
+# not a requirement for users.
+/bios/*
+!/bios/README.md
+
+# Cartridge images, save states, classifier output: ALL of it stays out of git.
+# Blanket-ignore the whole tree so no copyrighted image can be committed by
+# landing in a subfolder somebody forgot to cover.
+/dumps/*
+!/dumps/README.md
+
+# Hardware documentation. Third-party reference material (Z80 manuals, TI
+# datasheets, BIOS disassemblies) is not ours to redistribute, even when freely
+# available. So under docs/ only **markdown** is tracked: our own notes, and the
+# derived write-ups in docs/ref/ that cite their sources rather than reproducing
+# them. Raw drops of any other kind can land anywhere in here and stay
+# untracked.
+#
+# A BIOS disassembly is the sharp case. Distil what the interface IS and cite
+# where it came from; do not paste the listing.
+/docs/**
+!/docs/**/
+!/docs/**/*.md
+
+# Vendored third-party test suites and their reference logs.
+/tests/
+
+# Headless render / audio / TTY dumps from the dev harnesses.
+/out/
+
+# Local convenience junction to an Android app's jniLibs.
+android-jnilibs/

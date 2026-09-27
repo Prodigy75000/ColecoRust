@@ -1,0 +1,16 @@
+[package]
+name = "coleco-libretro"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "libretro core for ColecoRust, a clean-room ColecoVision emulator."
+
+[lib]
+# cdylib -> libcolecorust_libretro.so / colecorust_libretro.dll / .dylib
+name = "colecorust_libretro"
+crate-type = ["cdylib"]
+
+[dependencies]
+coleco-core = { path = "../coleco-core" }

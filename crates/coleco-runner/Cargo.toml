@@ -1,0 +1,17 @@
+[package]
+name = "coleco-runner"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Dev harnesses for ColecoRust: test-ROM runs, headless renders, and HLE-versus-real-BIOS differential runs."
+
+# Boot a cartridge and step it. The first harness, and the one that stays
+# useful longest.
+[[bin]]
+name = "coleco"
+path = "src/coleco.rs"
+
+[dependencies]
+coleco-core = { path = "../coleco-core" }

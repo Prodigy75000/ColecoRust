@@ -1,0 +1,21 @@
+# ColecoRust: a clean-room ColecoVision emulator core, written from scratch in
+# Rust, whose point is the HLE BIOS.
+#
+# Standalone workspace, deliberately, like RustStation and CubeRust. The
+# umbrella Cargo.toml is a narrow explicit list and excludes repos that are
+# their own workspace roots.
+[workspace]
+resolver = "2"
+members = ["crates/coleco-core", "crates/coleco-libretro", "crates/coleco-runner"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/Prodigy75000/ColecoRust"
+authors = ["Prodigy75000"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
