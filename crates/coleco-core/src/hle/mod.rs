@@ -30,6 +30,7 @@
 
 pub mod font;
 pub mod objects;
+pub mod pvariant;
 pub mod routines;
 pub mod sound;
 pub mod timers;

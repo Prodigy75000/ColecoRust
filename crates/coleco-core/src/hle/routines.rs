@@ -109,6 +109,9 @@ pub const ENTRY_POINTS: [u16; 6] = [0x07e8, 0x080b, 0x08c0, 0x196b, 0x1987, 0x1c
 
 pub fn call(target: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
     use super::{objects, sound, timers};
+    if super::pvariant::is_entry(target) {
+        return super::pvariant::run(target, cpu, bus);
+    }
     match target {
         0x196b => return Some(delay(cpu, bus)),
         0x025e => return Some(sound::play_it(cpu, bus)),

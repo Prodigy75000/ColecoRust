@@ -121,7 +121,9 @@ impl Side {
             let entry = regs(&self.m);
             let (frame, in_nmi) = (self.frame, self.in_nmi.is_some());
             let mut guard = 0u64;
-            while !(self.m.cpu.pc == ret && self.m.cpu.sp == sp.wrapping_add(2)) && guard < 20_000_000 {
+            // Back when the return address is popped and the CPU is in the
+            // cartridge: P entries return past the words after their CALL.
+            while !(self.m.cpu.sp == sp.wrapping_add(2) && self.m.cpu.pc >= 0x8000) && guard < 20_000_000 {
                 self.step(keys);
                 guard += 1;
             }

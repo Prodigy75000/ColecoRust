@@ -49,7 +49,7 @@ n	verdict	class	dump	title	file	crc32	size	header	first_cart_frame	nmis	colours	
 47	ALIVE	commercial	good	Dig Dug	ColecoVision/Dig Dug (1983) (Atarisoft)/Dig Dug (1983) (Atarisoft) (Prototype) [o1].col	1fe02bbc	25088	skip	0	1427	8	true	5180	a4c5	0	0	
 48	ALIVE	commercial	good	Dig Dug	ColecoVision/Dig Dug (1983) (Atarisoft)/Dig Dug (1983) (Atarisoft) (Prototype).col	1038e0a1	24576	skip	0	1427	8	true	5180	a4c5	0	0	
 49	ALIVE	commercial	good	Donkey Kong	ColecoVision/Donkey Kong (1982)/Donkey Kong (1982).col	3c77198c	16384	title	0	1183	9	true	14697	8136	0	0	
-50	STATIC	commercial	good	Donkey Kong for Adam	ColecoVision/Donkey Kong (1982)/Donkey Kong for Adam (1982).col	94c4cd4a	24576	title	0	0	2	false	0	a00a	11	2	0203,0251,0488,0655,0F9A,1044,10BF,1B0E,1C10,1C5A,1CBC,00CD,0456
+50	ALIVE	commercial	good	Donkey Kong for Adam	ColecoVision/Donkey Kong (1982)/Donkey Kong for Adam (1982).col	94c4cd4a	24576	title	0	1327	9	true	18972	d99b	0	0	
 51	ALIVE	commercial	good	Donkey Kong Jr	ColecoVision/Donkey Kong Jr (1982-83).col	fd11508d	16384	title	0	3586	13	true	8789	a14d	0	0	
 52	STATIC	commercial	good	Dr. Seuss's Fix-Up The Mix-Up Puzzler	ColecoVision/Dr. Seuss's Fix-Up The Mix-Up Puzzler (1984) (Coleco).col	109699e2	16384	title	0	0	9	false	0	8440	0	0	
 53	ALIVE	commercial	good	DragonFire	ColecoVision/DragonFire (1984) (Imagic).col	dcb8f9e8	16384	title	0	1618	12	true	11452	83b9	0	0	
@@ -240,8 +240,8 @@ n	verdict	class	dump	title	file	crc32	size	header	first_cart_frame	nmis	colours	
 238	ALIVE	commercial	bad	Slurpy	ColecoVision/Slurpy (1984) (Xonox)/Slurpy (1984) (Xonox) [b1].col	8871e9fd	16384	skip	0	1571	7	true	8191	8a25	0	0	
 239	ALIVE	commercial	good	Slurpy	ColecoVision/Slurpy (1984) (Xonox)/Slurpy (1984) (Xonox).col	27f5c0ad	24576	skip	0	1571	7	true	8191	8a25	0	0	
 240	ALIVE	commercial	good	Smurf - Paint 'n Play Workshop	ColecoVision/Smurf - Paint 'n Play Workshop (1983).col	97c0382d	24576	title	0	1638	15	true	7225	1fd0	0	0	
-241	ALIVE	commercial	bad	Smurf - Rescue in Gargamel's Castle	ColecoVision/Smurf - Rescue in Gargamel's Castle (1982)/Smurf - Rescue in Gargamel's Castle (1982) [b1].col	d1a1fe0b	16384	title	0	0	7	false	9783	9f92	6	0	0203,0F9A,1044,10BF,1B0E,1CBC
-242	ALIVE	commercial	good	Smurf - Rescue in Gargamel's Castle	ColecoVision/Smurf - Rescue in Gargamel's Castle (1982)/Smurf - Rescue in Gargamel's Castle (1982).col	42850379	16384	title	0	0	7	false	9783	9f92	6	0	0203,0F9A,1044,10BF,1B0E,1CBC
+241	ALIVE	commercial	bad	Smurf - Rescue in Gargamel's Castle	ColecoVision/Smurf - Rescue in Gargamel's Castle (1982)/Smurf - Rescue in Gargamel's Castle (1982) [b1].col	d1a1fe0b	16384	title	0	0	11	false	9783	9f92	0	0	
+242	ALIVE	commercial	good	Smurf - Rescue in Gargamel's Castle	ColecoVision/Smurf - Rescue in Gargamel's Castle (1982)/Smurf - Rescue in Gargamel's Castle (1982).col	42850379	16384	title	0	0	11	false	9783	9f92	0	0	
 243	BLANK	commercial	bad	Space Fury	ColecoVision/Space Fury (1983) (Sega)/Space Fury (1983) (Sega) [b1].col	567be2b0	16384	title	0	1	1	false	0	0038	0	0	
 244	ALIVE	commercial	good	Space Fury	ColecoVision/Space Fury (1983) (Sega)/Space Fury (1983) (Sega).col	df8de30f	16384	title	0	885	4	true	15504	8cd8	0	0	
 245	ALIVE	commercial	good	Space Panic	ColecoVision/Space Panic (1983) (Universal).col	5bdf2997	16384	title	0	1027	9	true	12315	95f4	0	0	
@@ -296,6 +296,6 @@ n	verdict	class	dump	title	file	crc32	size	header	first_cart_frame	nmis	colours	
 294	ALIVE	commercial	good	Wizard of Id's Wizmath	ColecoVision/Wizard of Id's Wizmath (1984) (Sierravision).col	b9ba2bb6	16384	skip	0	1563	3	false	6506	8086	0	0	
 295	ALIVE	commercial	good	Word Feud	ColecoVision/Word Feud (1984) (Xonox).col	9f49bed8	16384	skip	0	1547	4	true	326	8f26	0	2	18F7,1968
 296	STATIC	commercial	good	Yolk's on You, The	ColecoVision/Yolk's on You, The (1983) (20th Century Fox) (Prototype).col	997ad8de	16384	skip	0	1115	8	false	0	89e2	0	0	
-297	STATIC	commercial	bad	Zaxxon	ColecoVision/Zaxxon (1982) (Sega)/Zaxxon (1982) (Sega) [b1].col	1f947468	24576	title	0	0	2	false	0	1ffd	1	0	1CED
-298	STATIC	commercial	good	Zaxxon	ColecoVision/Zaxxon (1982) (Sega)/Zaxxon (1982) (Sega).col	8cb0891a	24576	title	0	0	2	false	0	1ffd	1	0	1CED
+297	ALIVE	commercial	bad	Zaxxon	ColecoVision/Zaxxon (1982) (Sega)/Zaxxon (1982) (Sega) [b1].col	1f947468	24576	title	0	515	2	true	17413	c5eb	0	0	
+298	ALIVE	commercial	good	Zaxxon	ColecoVision/Zaxxon (1982) (Sega)/Zaxxon (1982) (Sega).col	8cb0891a	24576	title	0	515	2	true	17413	c5eb	0	0	
 299	ALIVE	commercial	good	Zenji	ColecoVision/Zenji (1984) (Activision).col	6e523e50	16384	skip	0	1493	6	true	0	83c2	0	0	

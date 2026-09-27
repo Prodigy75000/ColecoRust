@@ -50,6 +50,13 @@ const ALL_SAMPLES: u32 = 5000;
 /// entered by JP, or one that never returns).
 const TIMEOUT: u64 = 4_000_000;
 
+/// Back from a call made with SP at `sp0`: the return address popped and
+/// the CPU in cartridge code. Not "at the return address": the P entries
+/// return past the parameters written after their CALL.
+fn returned(m: &Coleco, sp0: u16) -> bool {
+    m.cpu.sp == sp0.wrapping_add(2) && m.cpu.pc >= 0x8000
+}
+
 fn save<T: SaveState>(x: &T) -> Vec<u8> {
     let mut w = WriteCursor::new();
     x.save(&mut w);
@@ -202,9 +209,8 @@ fn run_title(
                 let pads = m.bus.pads;
                 let class = object_type(&m, target);
                 let sp0 = m.cpu.sp;
-                let ret = u16::from_le_bytes([m.bus.peek(sp0), m.bus.peek(sp0.wrapping_add(1))]);
                 let (c0, n0) = (m.cycles(), m.nmis);
-                while !(m.cpu.pc == ret && m.cpu.sp == sp0.wrapping_add(2)) && m.cycles() - c0 < TIMEOUT {
+                while !returned(&m, sp0) && m.cycles() - c0 < TIMEOUT {
                     m.step();
                 }
                 if m.cycles() - c0 >= TIMEOUT {
@@ -217,7 +223,7 @@ fn run_title(
                     h.load_state(&before).expect("state from the same build");
                     h.bus.pads = pads;
                     let hc0 = h.cycles();
-                    while !(h.cpu.pc == ret && h.cpu.sp == sp0.wrapping_add(2)) && h.cycles() - hc0 < TIMEOUT {
+                    while !returned(&h, sp0) && h.cycles() - hc0 < TIMEOUT {
                         h.step();
                     }
                     t.hle_cycles += h.cycles() - hc0;

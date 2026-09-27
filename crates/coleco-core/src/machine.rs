@@ -508,18 +508,22 @@ mod tests {
         assert!(m.cpu.halted);
     }
 
-    /// An unwritten routine returns to its caller and is logged.
+    /// A call to a BIOS address that is no routine returns to its caller and
+    /// is logged as wild, with where it came from. (Every jump-table routine
+    /// is written, so the unwritten-routine log has nothing left to show.)
     #[test]
-    fn an_unwritten_routine_returns_and_is_logged() {
-        // Cart: at $8100, CALL $1F64 (ACTIVATEP, not written yet), then JR $ (spin).
+    fn a_call_to_no_routine_returns_and_is_logged() {
+        // Cart: at $8100, CALL $0100 (inside the BIOS, no routine), then JR $.
         let mut cart = vec![0u8; 0x200];
         cart[0..2].copy_from_slice(&[0x55, 0xaa]);
         cart[0x0a..0x0c].copy_from_slice(&[0x00, 0x81]);
-        cart[0x100..0x105].copy_from_slice(&[0xcd, 0x64, 0x1f, 0x18, 0xfe]);
+        cart[0x100..0x105].copy_from_slice(&[0xcd, 0x00, 0x01, 0x18, 0xfe]);
         let mut m = Coleco::new(Firmware::Hle, &cart).unwrap();
         m.run_frame();
         assert_eq!(m.cpu.pc, 0x8103, "back after the CALL, spinning");
-        assert_eq!(m.hle_log.unimplemented.get(&0x0488), Some(&1));
+        assert_eq!(m.hle_log.wild.get(&0x0100), Some(&1));
+        assert_eq!(m.hle_log.wild_from.get(&0x0100), Some(&0x8100));
+        assert!(m.hle_log.unimplemented.is_empty());
     }
 
     #[test]
