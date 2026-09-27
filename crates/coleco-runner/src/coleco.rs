@@ -15,6 +15,8 @@
 //! cartridge's first instruction instead, and `--vram OUT` writes the 16 KB of
 //! VRAM as it stands at the end. `--probe` attaches the census probe and
 //! prints the BIOS entries it saw, with their callers, and the data reads.
+//! `--state FILE` starts from a save state (a device's `.state` is one) after
+//! building the machine on the same cartridge and BIOS mode.
 
 use coleco_core::machine::{Coleco, Firmware, Pad};
 use coleco_core::vdp::{HEIGHT, WIDTH};
@@ -25,7 +27,7 @@ mod png;
 use png::write_png;
 
 fn usage() -> ! {
-    eprintln!("usage: coleco [--bios PATH] [--frames N] [--png OUT] [--key FRAME:K]... [--fire FRAME]... [--until-cart] [--vram OUT] [--probe] CART");
+    eprintln!("usage: coleco [--bios PATH] [--frames N] [--png OUT] [--key FRAME:K]... [--fire FRAME]... [--until-cart] [--vram OUT] [--probe] [--state FILE] CART");
     eprintln!();
     eprintln!("Runs CART for N frames (default 60) on the real BIOS at PATH, or on");
     eprintln!("the HLE when no --bios is given, and optionally writes the last frame.");
@@ -41,6 +43,7 @@ fn main() {
     let mut fires: Vec<u32> = Vec::new();
     let mut until_cart = false;
     let mut probe = false;
+    let mut state: Option<String> = None;
     let mut vram_out: Option<String> = None;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
@@ -50,6 +53,7 @@ fn main() {
             "--png" => png = Some(args.next().unwrap_or_else(|| usage())),
             "--until-cart" => until_cart = true,
             "--probe" => probe = true,
+            "--state" => state = Some(args.next().unwrap_or_else(|| usage())),
             "--vram" => vram_out = Some(args.next().unwrap_or_else(|| usage())),
             "--key" => keys.push(parse_key(&args.next().unwrap_or_else(|| usage()))),
             "--fire" => fires.push(args.next().and_then(|v| v.parse().ok()).unwrap_or_else(|| usage())),
@@ -82,6 +86,16 @@ fn main() {
         std::process::exit(1)
     });
 
+    if let Some(p) = &state {
+        let bytes = std::fs::read(p).unwrap_or_else(|e| {
+            eprintln!("{p}: {e}");
+            std::process::exit(1)
+        });
+        if let Err(e) = m.load_state(&bytes) {
+            eprintln!("{p}: cannot load: {e:?}");
+            std::process::exit(1);
+        }
+    }
     if probe {
         m.bus.probe = Some(Box::new(coleco_core::census::Probe::new()));
     }
