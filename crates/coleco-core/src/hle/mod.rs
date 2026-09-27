@@ -63,6 +63,16 @@ pub const TABLE: [(u16, u16); 53] = [
 pub const GAME_OPT_TEXT: (u16, &[u8]) =
     (0x1a7c, b"TO SELECT GAME OPTION,PRESS BUTTON ON KEYPAD.1 = SKILL 1/ONE PLAYER2345678TWOS");
 
+/// The VDP's ports, where games look them up: the operands of READ_VRAM's
+/// first OUT to the control port (`$1D43`) and of its LD C for the data port
+/// (`$1D47`). Nine commercial titles read them rather than hard-coding
+/// `$BF` and `$BE`, the portable way (the ADAM moves nothing, but a game
+/// written this way cannot know that). With zeros there, Buck Rogers, Spy
+/// Hunter, Subroc, Tarzan and Ms. Space Fury wrote all their graphics to
+/// port 0 and showed a blank screen. Two port numbers: a fact about the
+/// hardware, not BIOS code.
+pub const VDP_PORTS: [(u16, u8); 2] = [(0x1d43, 0xbf), (0x1d47, 0xbe)];
+
 /// Where the reset trap parks a machine whose cartridge has no valid header:
 /// a HALT with interrupts off. The real BIOS shows a "turn game off" screen
 /// there; a blank screen says the same thing.
@@ -108,6 +118,9 @@ pub fn image() -> Box<[u8; BIOS_SIZE]> {
     // The sound driver's idle-channel marker: channels with nothing to play
     // point here, and the driver reads its first byte as "idle".
     b[sound::IDLE as usize] = 0xff;
+    for (at, port) in VDP_PORTS {
+        b[at as usize] = port;
+    }
     for &(slot, target) in &TABLE {
         let s = slot as usize;
         b[s..s + 3].copy_from_slice(&[0xc3, target as u8, (target >> 8) as u8]);
@@ -271,6 +284,15 @@ mod tests {
             assert!(!opt.contains(&t), "routine {t:04X} inside GAME_OPT's text");
             assert!(!runs_from_image(t), "routine {t:04X} would execute from the image");
         }
+    }
+
+    /// Games read the VDP's port numbers out of READ_VRAM's operands. Stated
+    /// as the hardware's numbers, not through VDP_PORTS, so a wrong table fails.
+    #[test]
+    fn the_vdp_ports_sit_where_games_read_them() {
+        let b = image();
+        assert_eq!(b[0x1d43], 0xbf, "control port");
+        assert_eq!(b[0x1d47], 0xbe, "data port");
     }
 
     /// Code the image must execute is not mistaken for a routine to trap.

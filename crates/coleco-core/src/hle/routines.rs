@@ -544,7 +544,7 @@ pub(super) fn bit_flags(f: u8, n: u32, r: u8) -> u8 {
 
 /// Flags as `ADD rr,rr` leaves them: S, Z and V kept, H from bit 11, carry
 /// from bit 15, N clear, bits 5 and 3 from the result's high byte.
-fn add16_flags(f: u8, a: u16, b: u16) -> u8 {
+pub(super) fn add16_flags(f: u8, a: u16, b: u16) -> u8 {
     let r = a.wrapping_add(b);
     (f & 0xc4)
         | ((r >> 8) as u8 & 0x28)
