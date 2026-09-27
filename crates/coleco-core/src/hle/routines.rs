@@ -98,6 +98,11 @@ pub fn call(target: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
     match target {
         0x025e => return Some(sound::play_it(cpu, bus)),
         0x027f => return Some(sound::sound_man(cpu, bus)),
+        0x18d4 => return Some(fill_vram(cpu, bus)),
+        0x1d5a | 0x1d60 | 0x1d66 | 0x1d6c => {
+            let kind = super::transform::Kind::at(target)?;
+            return Some(super::transform::transform(cpu, bus, kind));
+        }
         0x06d8 => return objects::putobj(cpu, bus).map(Flow::Ret),
         0x0679 => return objects::writer(cpu, bus).map(Flow::Ret),
         _ => {}
@@ -110,7 +115,6 @@ pub fn call(target: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
         0x1d57 => read_register(cpu, bus),
         0x1d01 => write_vram(cpu, bus),
         0x1d3e => read_vram(cpu, bus),
-        0x18d4 => fill_vram(cpu, bus),
         0x1b1d => init_table(cpu, bus),
         0x1ba3 => get_vram(cpu, bus),
         0x1c27 => put_vram(cpu, bus),
@@ -221,10 +225,55 @@ pub(super) fn read_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     60 + 34 * n as i32
 }
 
+/// Where FILL_VRAM reads the status at its end, on the real BIOS: the
+/// continuation when a frame's NMI has to be let in first.
+pub const FILL_STATUS: u16 = 0x18e5;
+
+/// Code in the BIOS window that game code returns into after an NMI the HLE
+/// let in part-way through a routine. `None` if `pc` is not one.
+pub fn resume(pc: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
+    match pc {
+        FILL_STATUS => {
+            cpu.set_a(bus.vdp.read_control());
+            Some(Flow::Ret(30))
+        }
+        _ => None,
+    }
+}
+
 /// FILL_VRAM (`$1F82`): write A to DE bytes of VRAM from HL (65536 when DE
 /// is 0), then read the status register, which clears a pending frame
 /// flag: a side effect games get whether they want it or not.
-fn fill_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
+///
+/// A large fill takes more than a frame, so on the real BIOS the frame's NMI
+/// arrives during it and the game's handler runs before the status read.
+/// Games count on the order: BC's Quest for Tires II writes VDP registers
+/// straight after a fill, knowing the read has left it a quiet frame, and
+/// an NMI taken after the return instead lands in those writes. So when the
+/// fill's time crosses the frame, the routine stops before its read, at the
+/// real read's address, and the NMI is taken there; the handler's return
+/// comes back to that address, where the read happens and the routine
+/// returns (`resume`).
+fn fill_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> Flow {
+    fill(cpu, bus);
+    if bus.irq_rose() && bus.vdp.irq() {
+        cpu.pc = FILL_STATUS;
+        return Flow::Jump(0);
+    }
+    cpu.set_a(bus.vdp.read_control());
+    Flow::Ret(30)
+}
+
+/// FILL_VRAM as another routine calls it (GAME_OPT): the same fill and read,
+/// with no NMI let in, since the HLE's own caller cannot be resumed.
+fn fill_vram_within(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
+    fill(cpu, bus);
+    cpu.set_a(bus.vdp.read_control());
+    30
+}
+
+/// FILL_VRAM up to its status read: the bytes written and their time spent.
+fn fill(cpu: &mut Z80, bus: &mut ColecoBus) {
     let (v, addr, count) = (cpu.a(), cpu.hl(), cpu.de());
     bus.vdp.write_control(addr as u8);
     bus.vdp.write_control((addr >> 8) as u8 | 0x40);
@@ -240,8 +289,6 @@ fn fill_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     // status at the END, clearing a frame flag raised on the way. So the
     // time passes first, then the read.
     bus.spend(60 + 41 * n as i32);
-    cpu.set_a(bus.vdp.read_control());
-    30
 }
 
 /// INIT_TABLE (`$1FB8`): VRAM table A lives at HL. Records the address at
@@ -746,7 +793,7 @@ fn game_opt(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     cpu.set_hl(0);
     cpu.set_de(0x4000);
     cpu.set_a(0);
-    c += fill_vram(cpu, bus);
+    c += fill_vram_within(cpu, bus);
     c += mode_1(cpu, bus);
     set_bc(cpu, 15, 4);
     c += write_register(cpu, bus);
@@ -776,7 +823,7 @@ fn game_opt(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     cpu.set_hl(ram16(bus, 0x73fa));
     cpu.set_de(0x20);
     cpu.set_a(0xf4);
-    c += fill_vram(cpu, bus);
+    c += fill_vram_within(cpu, bus);
     set_bc(cpu, 1, 0xc0);
     c + write_register(cpu, bus)
 }

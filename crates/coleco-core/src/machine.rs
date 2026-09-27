@@ -139,6 +139,9 @@ pub struct ColecoBus {
     in_line: bool,
     /// CPU cycles since power-on. A diagnostic, not machine state.
     pub cycles: u64,
+    /// The VDP interrupt line rose while lines were being closed. Set and
+    /// consumed within one `Coleco::step`, so never part of a save state.
+    irq_rose: bool,
 }
 
 impl ColecoBus {
@@ -149,6 +152,8 @@ impl ColecoBus {
     /// effects (a status read, say) land after the lines it spans, as the
     /// real one's do. An NMI those lines raise is taken when the routine
     /// returns, not inside it: the one place the HLE's timing is coarser.
+    /// The rising edge is remembered even if the routine then reads the
+    /// status and drops the line again, as the Z80 latches an NMI edge.
     pub fn spend(&mut self, cycles: i32) {
         self.line_cycles += cycles;
         self.cycles += cycles as u64;
@@ -157,13 +162,24 @@ impl ColecoBus {
         // is the single close it always was.
         while self.line_cycles >= CYCLES_PER_LINE {
             self.line_cycles -= CYCLES_PER_LINE;
+            let before = self.vdp.irq();
             self.vdp.end_line();
+            if !before && self.vdp.irq() {
+                self.irq_rose = true;
+            }
             self.in_line = false;
             if self.line_cycles >= CYCLES_PER_LINE {
                 self.vdp.begin_line();
                 self.in_line = true;
             }
         }
+    }
+
+    /// Whether the VDP interrupt line has risen during this step so far: an
+    /// HLE routine spanning a frame asks, to let the NMI in where the real
+    /// routine would have taken it.
+    pub(crate) fn irq_rose(&self) -> bool {
+        self.irq_rose
     }
 
     /// A read with no side effects and no probe: for instrumentation.
@@ -271,6 +287,7 @@ impl Coleco {
             line_cycles: 0,
             in_line: false,
             cycles: 0,
+            irq_rose: false,
         };
         let mut m = Coleco {
             cpu: Z80::new(),
@@ -347,6 +364,22 @@ impl Coleco {
             }
             c += s;
             self.bus.spend(c);
+        }
+        // A rising edge during the step. Still high: the next step's poll
+        // takes it, as it always did, told the line was low before. Already
+        // low again: an HLE routine that spans a frame and reads the status
+        // at its end (FILL_VRAM) raised and dropped it inside one step. The
+        // Z80 would have latched that edge and taken the NMI part-way through
+        // the real routine, so take it now rather than lose it; BC's Quest
+        // for Tires II counts frames in its NMI and lost one per screen fill.
+        if std::mem::take(&mut self.bus.irq_rose) {
+            if self.bus.vdp.irq() {
+                self.int_line = false;
+            } else {
+                self.nmis += 1;
+                let n = self.cpu.nmi(&mut self.bus);
+                self.bus.spend(n);
+            }
         }
     }
 
@@ -478,15 +511,15 @@ mod tests {
     /// An unwritten routine returns to its caller and is logged.
     #[test]
     fn an_unwritten_routine_returns_and_is_logged() {
-        // Cart: at $8100, CALL $1F6A (REFLECT_VERTICAL, not written yet), then JR $ (spin).
+        // Cart: at $8100, CALL $1F64 (ACTIVATEP, not written yet), then JR $ (spin).
         let mut cart = vec![0u8; 0x200];
         cart[0..2].copy_from_slice(&[0x55, 0xaa]);
         cart[0x0a..0x0c].copy_from_slice(&[0x00, 0x81]);
-        cart[0x100..0x105].copy_from_slice(&[0xcd, 0x6a, 0x1f, 0x18, 0xfe]);
+        cart[0x100..0x105].copy_from_slice(&[0xcd, 0x64, 0x1f, 0x18, 0xfe]);
         let mut m = Coleco::new(Firmware::Hle, &cart).unwrap();
         m.run_frame();
         assert_eq!(m.cpu.pc, 0x8103, "back after the CALL, spinning");
-        assert_eq!(m.hle_log.unimplemented.get(&0x1d5a), Some(&1));
+        assert_eq!(m.hle_log.unimplemented.get(&0x0488), Some(&1));
     }
 
     #[test]

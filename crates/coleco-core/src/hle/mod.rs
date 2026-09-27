@@ -33,6 +33,7 @@ pub mod objects;
 pub mod routines;
 pub mod sound;
 pub mod timers;
+pub mod transform;
 
 use crate::machine::ColecoBus;
 use crate::z80::{Bus, Z80};
@@ -72,6 +73,27 @@ pub const GAME_OPT_TEXT: (u16, &[u8]) =
 /// port 0 and showed a blank screen. Two port numbers: a fact about the
 /// hardware, not BIOS code.
 pub const VDP_PORTS: [(u16, u8); 2] = [(0x1d43, 0xbf), (0x1d47, 0xbe)];
+
+/// Where the title screen's logo layout starts: a list of pattern numbers
+/// ended by `$FF`. Some `$55AA`-header games, which skip the BIOS title,
+/// draw an imitation of it themselves from the BIOS's own logo data: BC's
+/// Quest for Tires II walks this list until its `$FF`, copying a logo
+/// pattern into VRAM per entry. With no `$FF` before the end of the image
+/// it ran for nearly 1,900 entries and wrote over all of VRAM (a red screen
+/// where the game should be). The image holds no logo, Coleco's artwork
+/// being no part of this project: the list is empty, just its end marker,
+/// and those games draw a blank title card.
+pub const LOGO_LAYOUT: u16 = 0x18a3;
+
+/// A few bytes of the HLE's own Z80 code, for routines that must leave the
+/// alternate registers set. The real graphics transforms work in the
+/// alternate set and hand the caller's advanced pointers back there, and
+/// BC's Quest for Tires II chains its calls on them with EXX; the CPU core's
+/// alternate registers are its own (the core is shared, unchanged, with
+/// MegaRust), so the CPU swaps them itself: a routine loads the values meant
+/// for the alternates into the main registers, pushes the ones meant to stay
+/// main, and jumps here. `EXX; EX AF,AF'; POP AF; POP BC; POP DE; POP HL; RET`.
+pub const EXCHANGE: (u16, [u8; 7]) = (0x1f58, [0xd9, 0x08, 0xf1, 0xc1, 0xd1, 0xe1, 0xc9]);
 
 /// Where the reset trap parks a machine whose cartridge has no valid header:
 /// a HALT with interrupts off. The real BIOS shows a "turn game off" screen
@@ -118,6 +140,9 @@ pub fn image() -> Box<[u8; BIOS_SIZE]> {
     // The sound driver's idle-channel marker: channels with nothing to play
     // point here, and the driver reads its first byte as "idle".
     b[sound::IDLE as usize] = 0xff;
+    b[LOGO_LAYOUT as usize] = 0xff;
+    let (at, code) = EXCHANGE;
+    b[at as usize..at as usize + code.len()].copy_from_slice(&code);
     for (at, port) in VDP_PORTS {
         b[at as usize] = port;
     }
@@ -152,6 +177,7 @@ fn runs_from_image(pc: u16) -> bool {
         || (0x0008..0x003b).contains(&pc) && (pc & 7) < 3
         || (0x0066..0x0069).contains(&pc)
         || (0x1f61..0x2000).contains(&pc)
+        || (EXCHANGE.0..EXCHANGE.0 + EXCHANGE.1.len() as u16).contains(&pc)
 }
 
 /// Called before each instruction with the PC in the BIOS window. `None`: the
@@ -165,8 +191,10 @@ pub fn trap(cpu: &mut Z80, bus: &mut ColecoBus, log: &mut HleLog) -> Option<i32>
     if runs_from_image(pc) {
         return None;
     }
-    // Game code returning into the sound driver after a special sound.
-    let flow = match sound::resume(pc, cpu, bus) {
+    // Game code returning into the sound driver after a special sound, or
+    // into a routine after an NMI let in part-way through it.
+    let resumed = sound::resume(pc, cpu, bus).or_else(|| routines::resume(pc, cpu, bus));
+    let flow = match resumed {
         Some(flow) => Some(flow),
         None if TABLE.iter().any(|&(_, t)| t == pc) => routines::call(pc, cpu, bus),
         None => None,
@@ -293,6 +321,49 @@ mod tests {
         let b = image();
         assert_eq!(b[0x1d43], 0xbf, "control port");
         assert_eq!(b[0x1d47], 0xbe, "data port");
+    }
+
+    /// The logo layout is an empty list: its end marker first, where a game
+    /// walking it looks.
+    #[test]
+    fn the_logo_layout_is_empty_but_ended() {
+        assert_eq!(image()[0x18a3], 0xff);
+    }
+
+    /// The exchange stub runs as Z80 code and swaps the register sets: run on
+    /// the real core, main and alternate trade places and the pushed values
+    /// come back as the main set.
+    #[test]
+    fn the_exchange_stub_leaves_the_pushed_set_main_and_the_loaded_one_alternate() {
+        use crate::machine::{Coleco, Firmware};
+        let mut m = Coleco::new(Firmware::Hle, &[0u8; 0x2000]).unwrap();
+        m.cpu.sp = 0x73b0;
+        // The caller's return address, then the values to come back main.
+        for v in [0x8123u16, 0x4444, 0x3333, 0x2222, 0x11ff] {
+            m.cpu.sp -= 2;
+            m.bus.ram[(m.cpu.sp & 0x3ff) as usize] = v as u8;
+            m.bus.ram[(m.cpu.sp.wrapping_add(1) & 0x3ff) as usize] = (v >> 8) as u8;
+        }
+        // The values meant for the alternates, in main.
+        m.cpu.set_a(0x01);
+        m.cpu.f = 0x02;
+        m.cpu.set_bc(0x0000);
+        m.cpu.set_de(0x0005);
+        m.cpu.set_hl(0x0009);
+        m.cpu.pc = 0x1f58;
+        for _ in 0..7 {
+            m.step();
+        }
+        assert_eq!(m.cpu.pc, 0x8123);
+        assert_eq!((m.cpu.a(), m.cpu.f), (0x11, 0xff));
+        assert_eq!((m.cpu.bc(), m.cpu.de(), m.cpu.hl()), (0x2222, 0x3333, 0x4444));
+        // And back: what EXX and EX AF,AF' now give the caller.
+        m.cpu.pc = 0x1f58;
+        m.cpu.sp -= 10;
+        m.step();
+        m.step();
+        assert_eq!((m.cpu.a(), m.cpu.f), (0x01, 0x02));
+        assert_eq!((m.cpu.bc(), m.cpu.de(), m.cpu.hl()), (0x0000, 0x0005, 0x0009));
     }
 
     /// Code the image must execute is not mistaken for a routine to trap.
