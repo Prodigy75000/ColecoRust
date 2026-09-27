@@ -13,5 +13,11 @@ description = "Dev harnesses for ColecoRust: test-ROM runs, headless renders, an
 name = "coleco"
 path = "src/coleco.rs"
 
+# Z80 conformance: ZEXDOC then ZEXALL, on a minimal test bus. Lifted from
+# MegaRust with the CPU.
+[[bin]]
+name = "zexall"
+path = "src/zexall.rs"
+
 [dependencies]
 coleco-core = { path = "../coleco-core" }

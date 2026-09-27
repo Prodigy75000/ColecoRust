@@ -41,6 +41,9 @@
 //! real BIOS puts, where the real BIOS puts it, and keep its own state on the
 //! host side.
 
+pub mod save;
+pub mod z80;
+
 /// Z80A clock, 3.579545 MHz. One third of the NTSC colour burst, which is why
 /// it is that number and not a round one.
 pub const CPU_HZ: u32 = 3_579_545;

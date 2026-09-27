@@ -92,7 +92,7 @@ is the right one here, but it needs a rule or it becomes an opinion:
 
 | Component | State |
 |-----------|-------|
-| Z80 | not started |
+| Z80 | lifted from MegaRust (`origin/main` 3e97ca7), ZEXDOC and ZEXALL 79/79 here; `cargo run --release -p coleco-runner --bin zexall` |
 | TMS9918A | not started |
 | SN76489 | not started |
 | Controllers and keypad | not started |
