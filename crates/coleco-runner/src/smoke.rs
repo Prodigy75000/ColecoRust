@@ -64,6 +64,8 @@ struct Row {
     pc: u16,
     hle_unimplemented: usize,
     hle_wild: usize,
+    /// The unwritten routines and wild addresses, as `ADDR,ADDR`.
+    hle_list: String,
     frame: Vec<u32>,
 }
 
@@ -88,6 +90,7 @@ fn run_one(bios: Option<&[u8]>, path: &Path, root: &Path) -> Row {
         pc: 0,
         hle_unimplemented: 0,
         hle_wild: 0,
+        hle_list: String::new(),
         frame: vec![0xff00_0000; WIDTH * HEIGHT],
     };
     let firmware = match bios {
@@ -123,6 +126,14 @@ fn run_one(bios: Option<&[u8]>, path: &Path, root: &Path) -> Row {
     row.pc = m.cpu.pc;
     row.hle_unimplemented = m.hle_log.unimplemented.len();
     row.hle_wild = m.hle_log.wild.len();
+    row.hle_list = m
+        .hle_log
+        .unimplemented
+        .keys()
+        .chain(m.hle_log.wild.keys())
+        .map(|a| format!("{a:04X}"))
+        .collect::<Vec<_>>()
+        .join(",");
 
     let display_on = m.bus.vdp.regs[1] & 0x40 != 0;
     let open_bus = (0x2000..0x6000).contains(&m.cpu.pc);
@@ -197,11 +208,11 @@ fn main() {
     rows.sort_by_key(|(i, _)| *i);
 
     let mut tsv = String::from(
-        "n\tverdict\tclass\tdump\ttitle\tfile\tcrc32\tsize\theader\tfirst_cart_frame\tnmis\tcolours\tmoving\tpeak\tend_pc\thle_unimplemented\thle_wild\n",
+        "n\tverdict\tclass\tdump\ttitle\tfile\tcrc32\tsize\theader\tfirst_cart_frame\tnmis\tcolours\tmoving\tpeak\tend_pc\thle_unimplemented\thle_wild\thle_addresses\n",
     );
     for (i, r) in &rows {
         tsv.push_str(&format!(
-            "{}\t{}\t{}\t{}\t{}\t{}\t{:08x}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:04x}\t{}\t{}\n",
+            "{}\t{}\t{}\t{}\t{}\t{}\t{:08x}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:04x}\t{}\t{}\t{}\n",
             i,
             r.verdict,
             r.class,
@@ -218,7 +229,8 @@ fn main() {
             r.peak,
             r.pc,
             r.hle_unimplemented,
-            r.hle_wild
+            r.hle_wild,
+            r.hle_list
         ));
     }
     std::fs::write(format!("{out}/smoke.tsv"), &tsv).expect("write tsv");

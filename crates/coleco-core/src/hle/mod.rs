@@ -54,6 +54,13 @@ pub const TABLE: [(u16, u16); 53] = [
     (0x1ff7, 0x04a3), (0x1ffa, 0x06d8), (0x1ffd, 0x003b),
 ];
 
+/// GAME_OPT's text, at the addresses the real routine reads it from: two
+/// headings, the option line it writes eight times, and the pieces patched
+/// into it for the other seven. Plain instructions to the player, and the
+/// whole point of the screen, so the words are the real ones.
+pub const GAME_OPT_TEXT: (u16, &[u8]) =
+    (0x1a7c, b"TO SELECT GAME OPTION,PRESS BUTTON ON KEYPAD.1 = SKILL 1/ONE PLAYER2345678TWOS");
+
 /// Where the reset trap parks a machine whose cartridge has no valid header:
 /// a HALT with interrupts off. The real BIOS shows a "turn game off" screen
 /// there; a blank screen says the same thing.
@@ -94,6 +101,8 @@ pub fn image() -> Box<[u8; BIOS_SIZE]> {
         let at = font::BASE as usize + (c - font::FIRST) as usize * 8;
         b[at..at + 8].copy_from_slice(&font::pattern(c));
     }
+    let (at, text) = GAME_OPT_TEXT;
+    b[at as usize..at as usize + text.len()].copy_from_slice(text);
     // The sound driver's idle-channel marker: channels with nothing to play
     // point here, and the driver reads its first byte as "idle".
     b[sound::IDLE as usize] = 0xff;
@@ -253,8 +262,11 @@ mod tests {
     #[test]
     fn the_pieces_of_the_image_do_not_overlap() {
         let font = font::BASE..=0x18a2;
+        let (at, text) = GAME_OPT_TEXT;
+        let opt = at..at + text.len() as u16;
         for &(_, t) in &TABLE {
             assert!(!font.contains(&t), "routine {t:04X} inside the font");
+            assert!(!opt.contains(&t), "routine {t:04X} inside GAME_OPT's text");
             assert!(!runs_from_image(t), "routine {t:04X} would execute from the image");
         }
     }

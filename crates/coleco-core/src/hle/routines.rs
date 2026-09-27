@@ -121,6 +121,7 @@ pub fn call(target: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
         0x116a => update_spinner(cpu, bus),
         0x118b => decoder(cpu, bus),
         0x11c1 => poller(cpu, bus),
+        0x1979 => game_opt(cpu, bus),
         _ => return None,
     }))
 }
@@ -700,6 +701,75 @@ fn poller(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     cpu.ix = r.ix;
     cpu.iy = r.iy;
     cycles + 1380
+}
+
+/// Where GAME_OPT's text sits in the image (see `super::GAME_OPT_TEXT`): the
+/// two headings, the option line it writes eight times, and the pieces it
+/// patches in to make the other seven.
+const OPT_HEADING_1: u16 = 0x1a7c;
+const OPT_HEADING_2: u16 = 0x1a92;
+const OPT_LINE: u16 = 0x1aa9;
+const OPT_DIGITS: u16 = 0x1abf;
+const OPT_TWO: u16 = 0x1ac6;
+const OPT_S: u16 = 0x1ac9;
+
+/// One PUT_VRAM into the name table: IY characters from HL at cell DE.
+fn put_names(cpu: &mut Z80, bus: &mut ColecoBus, src: u16, cell: u16, count: u16) -> i32 {
+    cpu.set_hl(src);
+    cpu.set_de(cell);
+    cpu.iy = count;
+    cpu.set_a(2);
+    put_vram(cpu, bus) + 40
+}
+
+/// GAME_OPT (`$1F7C`): the standard game-option screen. It only draws; the
+/// game reads the keypad itself afterwards. Without it, a game that leaves
+/// its menu to the BIOS shows a black screen while it waits for a key: 51
+/// commercial titles call it, Tapper among them.
+///
+/// The real routine clears VRAM, sets MODE_1 with a dark blue backdrop,
+/// loads the font, writes two headings and "1 = SKILL 1/ONE PLAYER" on eight
+/// rows, then patches the option digits, the skill digits, "TWO" and a
+/// plural "S" into place, colours everything white on dark blue and turns
+/// the display on. The same calls, in the same order, here.
+fn game_opt(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
+    let mut c = 0;
+    cpu.set_hl(0);
+    cpu.set_de(0x4000);
+    cpu.set_a(0);
+    c += fill_vram(cpu, bus);
+    c += mode_1(cpu, bus);
+    set_bc(cpu, 15, 4);
+    c += write_register(cpu, bus);
+    c += load_ascii(cpu, bus);
+    c += put_names(cpu, bus, OPT_HEADING_1, 0x25, 0x16);
+    c += put_names(cpu, bus, OPT_HEADING_2, 0x65, 0x17);
+    // Eight option rows: 6, 8, 10, 12 for one player, 15-21 for two.
+    let rows: [u16; 8] = [0xc5, 0x105, 0x145, 0x185, 0x1e5, 0x225, 0x265, 0x2a5];
+    for row in rows {
+        c += put_names(cpu, bus, OPT_LINE, row, 0x16);
+    }
+    // The option number: 2-8 on rows two to eight.
+    for (i, &row) in rows[1..].iter().enumerate() {
+        c += put_names(cpu, bus, OPT_DIGITS + i as u16, row, 1);
+    }
+    // The skill number, column 15: 2-4 on both groups' later rows.
+    for (i, cell) in [0x10f, 0x14f, 0x18f, 0x22f, 0x26f, 0x2af].into_iter().enumerate() {
+        c += put_names(cpu, bus, OPT_DIGITS + (i % 3) as u16, cell, 1);
+    }
+    // TWO over ONE, and PLAYERS, on the two-player rows.
+    for cell in [0x1f1, 0x231, 0x271, 0x2b1] {
+        c += put_names(cpu, bus, OPT_TWO, cell, 3);
+    }
+    for cell in [0x1fb, 0x23b, 0x27b, 0x2bb] {
+        c += put_names(cpu, bus, OPT_S, cell, 1);
+    }
+    cpu.set_hl(ram16(bus, 0x73fa));
+    cpu.set_de(0x20);
+    cpu.set_a(0xf4);
+    c += fill_vram(cpu, bus);
+    set_bc(cpu, 1, 0xc0);
+    c + write_register(cpu, bus)
 }
 
 /// RAND_GEN (`$1FFD`): a 16-bit shift register at `$73C8`, fed back from
