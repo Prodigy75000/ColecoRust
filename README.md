@@ -102,5 +102,5 @@ is the right one here, but it needs a rule or it becomes an opinion:
 | Mapper / bank switching | not started |
 | HLE BIOS | image, own font, hand-over boot, and 22 routines: VDP registers and VRAM, tables, sprites, font, RNG, MODE_1, controllers and keypad, and the sound driver (including game-supplied special sounds, which call back into the cartridge). **132 of 164 commercial titles ALIVE with no BIOS file** (151 on the real BIOS); `ledger/smoke-hle.tsv` |
 | Save states | v1 layout, fixed size, round-trip tested |
-| libretro | not started |
+| libretro | `libcolecorust_libretro`: always the HLE BIOS (never asks for coleco.rom), 256x192 XRGB8888, 44.1 kHz, save states, SYSTEM_RAM and SET_MEMORY_MAPS, keypad on spare RetroPad buttons (START = 1, SELECT = 2) and a keyboard. Builds for arm64 Android; `scripts/deploy-android-debug.sh` |
 | Corpus smoke, REAL BIOS | 151 of 164 commercial titles and 42 of 48 PD titles ALIVE, 0 crashed; `ledger/smoke-real-bios.tsv`, `cargo run --release -p coleco-runner --bin smoke` |

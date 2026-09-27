@@ -350,6 +350,11 @@ impl Coleco {
         }
     }
 
+    /// The cartridge the machine was built with.
+    pub fn cartridge(&self) -> &[u8] {
+        &self.bus.cart
+    }
+
     /// CPU cycles since power-on, a routine's own spending included.
     pub fn cycles(&self) -> u64 {
         self.bus.cycles
