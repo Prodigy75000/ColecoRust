@@ -5,8 +5,10 @@ Copyright (C) 2026 Prodigy75000
 
 # ColecoRust
 
-A clean-room ColecoVision emulator core written from scratch in Rust. No C, no
-bindings, no lifted code.
+A clean-room ColecoVision emulator core written in Rust. No C, no bindings, and
+no third-party emulator code. It does reuse the owner's own in-house cores:
+the Z80 is MegaRust's, and the VDP and PSG are adapted from MegaRust's. Each
+such file says where it came from and at which commit.
 
 Started 2026-09-27. On the REAL BIOS, Donkey Kong boots through the title screen
 to gameplay with sound. The HLE, which is the point, does not exist yet.
