@@ -29,6 +29,7 @@
 //! so the save-state layout does not change.
 
 pub mod font;
+pub mod routines;
 
 use crate::machine::ColecoBus;
 use crate::z80::{Bus, Z80};
@@ -65,8 +66,14 @@ const HANDOVER_SP: u16 = 0x73b9;
 const BOOT_CYCLES: i32 = 100;
 
 /// Build the 8 KB image.
+///
+/// Unused space is `$00`, not `$FF`. It is never executed (a jump into it is
+/// a wild entry, trapped), but it IS read: games copy BIOS graphics they do
+/// not get from us (the title-screen logo tiles at `$14C3`) and read odd
+/// bytes as constants (Facemaker reads `$0100`, a zero on the real BIOS).
+/// Zero draws as empty tiles; `$FF` drew solid blocks.
 pub fn image() -> Box<[u8; BIOS_SIZE]> {
-    let mut b = Box::new([0xffu8; BIOS_SIZE]);
+    let mut b = Box::new([0x00u8; BIOS_SIZE]);
     // Reset: never executed (the PC-0 trap boots), but shaped like a boot so a
     // reader of the image sees what it stands for. $0003 is the parking HALT.
     b[0x0000..0x0004].copy_from_slice(&[0x31, 0x73b9u16 as u8, (0x73b9u16 >> 8) as u8, 0x76]);
@@ -131,7 +138,12 @@ pub fn trap(cpu: &mut Z80, bus: &mut ColecoBus, log: &mut HleLog) -> Option<i32>
         return None;
     }
     let known = TABLE.iter().any(|&(_, t)| t == pc);
-    // No routine is written yet: every call is logged and returns.
+    if known {
+        if let Some(c) = routines::call(pc, cpu, bus) {
+            return Some(c + ret(cpu, bus));
+        }
+    }
+    // Not written yet, or not a routine at all: logged, and it returns.
     if known {
         *log.unimplemented.entry(pc).or_default() += 1;
     } else {

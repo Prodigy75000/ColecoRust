@@ -28,6 +28,11 @@ path = "src/census.rs"
 name = "handover"
 path = "src/handover.rs"
 
+# One HLE routine against the real one, on every call the corpus makes.
+[[bin]]
+name = "routinediff"
+path = "src/routinediff.rs"
+
 # Z80 conformance: ZEXDOC then ZEXALL, on a minimal test bus. Lifted from
 # MegaRust with the CPU.
 [[bin]]

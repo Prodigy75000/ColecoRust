@@ -128,9 +128,40 @@ pub struct ColecoBus {
     keypad_mode: bool,
     /// The BIOS census instrument, when a harness attaches one. Not state.
     pub probe: Option<Box<Probe>>,
+    /// Cycles into the current scanline.
+    line_cycles: i32,
+    /// True between a line's `begin_line` and its `end_line`, so the machine
+    /// can be stepped one instruction at a time and stop anywhere.
+    in_line: bool,
+    /// CPU cycles since power-on. A diagnostic, not machine state.
+    pub cycles: u64,
 }
 
 impl ColecoBus {
+    /// Let `cycles` of machine time pass: the PSG runs and the VDP draws and
+    /// closes every scanline they cover. The CPU's steps come through here,
+    /// and so can an HLE routine part-way through, which is how a routine
+    /// that takes most of a frame on the real BIOS makes its later side
+    /// effects (a status read, say) land after the lines it spans, as the
+    /// real one's do. An NMI those lines raise is taken when the routine
+    /// returns, not inside it: the one place the HLE's timing is coarser.
+    pub fn spend(&mut self, cycles: i32) {
+        self.line_cycles += cycles;
+        self.cycles += cycles as u64;
+        self.audio.run(cycles as u32);
+        // No real instruction spans more than one line, so for the CPU this
+        // is the single close it always was.
+        while self.line_cycles >= CYCLES_PER_LINE {
+            self.line_cycles -= CYCLES_PER_LINE;
+            self.vdp.end_line();
+            self.in_line = false;
+            if self.line_cycles >= CYCLES_PER_LINE {
+                self.vdp.begin_line();
+                self.in_line = true;
+            }
+        }
+    }
+
     /// A read with no side effects and no probe: for instrumentation.
     pub fn peek(&self, addr: u16) -> u8 {
         match addr {
@@ -204,10 +235,6 @@ pub struct Coleco {
     pub bus: ColecoBus,
     /// The VDP interrupt line as last seen, for NMI edge detection.
     int_line: bool,
-    line_cycles: i32,
-    /// True between a line's `begin_line` and its `end_line`, so the machine
-    /// can be stepped one instruction at a time and stop anywhere.
-    in_line: bool,
     /// NMIs taken since power-on. A diagnostic, not machine state.
     pub nmis: u64,
     /// True when running on the HLE, so BIOS-window PCs go through its traps.
@@ -237,13 +264,14 @@ impl Coleco {
             pads: [Pad::default(); 2],
             keypad_mode: false,
             probe: None,
+            line_cycles: 0,
+            in_line: false,
+            cycles: 0,
         };
         let mut m = Coleco {
             cpu: Z80::new(),
             bus,
             int_line: false,
-            line_cycles: 0,
-            in_line: false,
             nmis: 0,
             hle,
             hle_log: Default::default(),
@@ -277,9 +305,9 @@ impl Coleco {
     /// the frame loop is built on this, so a harness that stops mid-frame sees
     /// exactly the machine a whole-frame run would.
     pub fn step(&mut self) {
-        if !self.in_line {
+        if !self.bus.in_line {
             self.bus.vdp.begin_line();
-            self.in_line = true;
+            self.bus.in_line = true;
         }
         {
             let interrupted = self.cpu.pc;
@@ -314,20 +342,25 @@ impl Coleco {
                 p.cycles(pc, s);
             }
             c += s;
-            self.line_cycles += c;
-            self.bus.audio.run(c as u32);
+            self.bus.spend(c);
         }
-        if self.line_cycles >= CYCLES_PER_LINE {
-            self.line_cycles -= CYCLES_PER_LINE;
-            self.bus.vdp.end_line();
-            self.in_line = false;
-        }
+    }
+
+    /// CPU cycles since power-on, a routine's own spending included.
+    pub fn cycles(&self) -> u64 {
+        self.bus.cycles
+    }
+
+    /// True while a scanline is open: false exactly between lines, which is
+    /// where a frame boundary falls when `vdp.line` is back to 0.
+    pub fn in_line(&self) -> bool {
+        self.bus.in_line
     }
 
     pub fn run_line(&mut self) {
         loop {
             self.step();
-            if !self.in_line {
+            if !self.bus.in_line {
                 break;
             }
         }
@@ -359,8 +392,8 @@ impl Coleco {
         self.bus.audio.save(&mut w);
         w.bool(self.bus.keypad_mode);
         w.bool(self.int_line);
-        w.i32(self.line_cycles);
-        w.bool(self.in_line);
+        w.i32(self.bus.line_cycles);
+        w.bool(self.bus.in_line);
         w.into_bytes()
     }
 
@@ -381,8 +414,8 @@ impl Coleco {
         self.bus.audio.load(&mut r)?;
         self.bus.keypad_mode = r.bool()?;
         self.int_line = r.bool()?;
-        self.line_cycles = r.i32()?;
-        self.in_line = r.bool()?;
+        self.bus.line_cycles = r.i32()?;
+        self.bus.in_line = r.bool()?;
         r.finish()
     }
 }
@@ -507,6 +540,31 @@ mod tests {
             m.run_frame();
         }
         assert_eq!(m.nmis, 3, "one per frame");
+    }
+
+    /// A routine charging most of a frame advances the VDP by that many
+    /// lines, not one.
+    #[test]
+    fn a_long_hle_routine_advances_the_scanlines_it_covers() {
+        // FILL_VRAM of 4096 bytes from the cartridge: CALL $1F82, then spin.
+        let mut cart = vec![0u8; 0x200];
+        cart[0..2].copy_from_slice(&[0x55, 0xaa]);
+        cart[0x0a..0x0c].copy_from_slice(&[0x00, 0x81]);
+        cart[0x100..0x10c].copy_from_slice(&[
+            0x21, 0x00, 0x00, // LD HL,0
+            0x11, 0x00, 0x10, // LD DE,$1000
+            0xcd, 0x82, 0x1f, // CALL FILL_VRAM
+            0x18, 0xfe, 0x00, // JR $
+        ]);
+        let mut m = Coleco::new(Firmware::Hle, &cart).unwrap();
+        while m.cpu.pc != 0x8109 {
+            m.step();
+        }
+        // 4096 bytes at about 41 cycles each is over 700 lines.
+        assert!(m.cycles() > 4096 * 41);
+        let lines = m.cycles() / CYCLES_PER_LINE as u64;
+        let frames_line = (lines % vdp::LINES_PER_FRAME as u64) as u16;
+        assert_eq!(m.bus.vdp.line, frames_line, "the VDP kept pace with the cycles");
     }
 
     #[test]

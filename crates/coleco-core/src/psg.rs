@@ -199,6 +199,24 @@ impl Psg {
         self.step_noise();
     }
 
+    /// The chip's programmed registers, without its running counters: tone
+    /// periods and attenuations, then noise control and attenuation, then the
+    /// latched register. What a routine sets, independent of when it ran.
+    pub fn registers(&self) -> [u16; 9] {
+        let t = &self.tone;
+        [
+            t[0].period,
+            t[0].attenuation as u16,
+            t[1].period,
+            t[1].attenuation as u16,
+            t[2].period,
+            t[2].attenuation as u16,
+            self.noise_ctrl as u16,
+            self.noise_attenuation as u16,
+            self.latched as u16,
+        ]
+    }
+
     /// Mono output of all four channels.
     pub fn output(&self) -> i16 {
         let mut sum: i32 = self.tone.iter().map(|t| t.output() as i32).sum();

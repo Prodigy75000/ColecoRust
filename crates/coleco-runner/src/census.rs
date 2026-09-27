@@ -62,25 +62,6 @@ fn run(bios: &[u8], path: &Path, root: &Path) -> Option<Title> {
     Some(Title { title, class, file, crc: png::crc32(&cart), probe })
 }
 
-/// One file per title: the first good dump, else the first that is not bad.
-fn representatives(paths: &[PathBuf], root: &Path) -> Vec<PathBuf> {
-    let mut best: BTreeMap<(String, &'static str), (u8, PathBuf)> = BTreeMap::new();
-    for p in paths {
-        let file = p.strip_prefix(root).unwrap_or(p).to_string_lossy().replace('\\', "/");
-        let (class, dump, title) = corpus::classify(&file);
-        let rank = match dump {
-            "good" => 0,
-            "bad" => continue,
-            _ => 1,
-        };
-        let e = best.entry((title, class)).or_insert((rank, p.clone()));
-        if rank < e.0 {
-            *e = (rank, p.clone());
-        }
-    }
-    best.into_values().map(|(_, p)| p).collect()
-}
-
 fn ranges(addrs: impl Iterator<Item = u16>) -> String {
     let mut out: Vec<String> = Vec::new();
     let mut run: Option<(u16, u16)> = None;
@@ -119,7 +100,7 @@ fn main() {
     let bios = Arc::new(std::fs::read(&bios_path).expect("read bios"));
     Coleco::bios_from_bytes(&bios).expect("an 8 KB BIOS");
     let root = Arc::new(PathBuf::from(&dir));
-    let paths = representatives(&corpus::cartridges(&root), &root);
+    let paths = corpus::representatives(&corpus::cartridges(&root), &root);
     std::fs::create_dir_all(&out).expect("create out dir");
 
     let jobs = Arc::new(Mutex::new(paths));

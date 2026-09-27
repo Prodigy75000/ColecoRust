@@ -7,6 +7,7 @@
 #![allow(dead_code)]
 
 use coleco_core::machine::Pad;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// Frames each cartridge runs: 25 s.
@@ -86,3 +87,21 @@ pub fn header(cart: &[u8]) -> &'static str {
     }
 }
 
+/// One file per title: the first good dump, else the first that is not bad.
+pub fn representatives(paths: &[PathBuf], root: &Path) -> Vec<PathBuf> {
+    let mut best: BTreeMap<(String, &'static str), (u8, PathBuf)> = BTreeMap::new();
+    for p in paths {
+        let file = p.strip_prefix(root).unwrap_or(p).to_string_lossy().replace('\\', "/");
+        let (class, dump, title) = classify(&file);
+        let rank = match dump {
+            "good" => 0,
+            "bad" => continue,
+            _ => 1,
+        };
+        let e = best.entry((title, class)).or_insert((rank, p.clone()));
+        if rank < e.0 {
+            *e = (rank, p.clone());
+        }
+    }
+    best.into_values().map(|(_, p)| p).collect()
+}
