@@ -1,0 +1,301 @@
+n	verdict	class	dump	title	file	crc32	size	header	first_cart_frame	nmis	colours	moving	peak	end_pc
+0	ALIVE	commercial	good	2010 - The Graphic Action Game	ColecoVision/2010 - The Graphic Action Game (1984) (Coleco).col	c575a831	32768	title	32	1468	14	true	8191	dca2
+1	ALIVE	commercial	good	Adam's Musicbox Demo	ColecoVision/Adam's Musicbox Demo (1987) (Coleco).col	164c8c26	24576	title	24	1475	2	false	11674	127a
+2	ALIVE	commercial	good	Alcazar - The Forgotten Fortress	ColecoVision/Alcazar - The Forgotten Fortress (1985) (Activision).col	9cc3fabc	16384	skip	0	1454	8	false	3261	971d
+3	ALIVE	commercial	good	Alphabet Zoo	ColecoVision/Alphabet Zoo (1984) (Spinnaker).col	4ffb4e8c	16384	skip	9	1466	8	true	8191	9e9a
+4	ALIVE	commercial	good	Amazing Bumpman	ColecoVision/Amazing Bumpman (1986) (Telegames).col	78a738af	16384	skip	13	1443	6	false	6522	1d4b
+5	ALIVE	commercial	good	Antarctic Adventure	ColecoVision/Antarctic Adventure (1984) (Konami)/Antarctic Adventure (1984) (Konami) (Prototype).col	a66e5ed1	16384	skip	0	1477	8	true	9783	8109
+6	ALIVE	commercial	good	Antarctic Adventure	ColecoVision/Antarctic Adventure (1984) (Konami)/Antarctic Adventure (1984) (Konami).col	275c800e	16384	skip	13	1328	9	true	9783	8109
+7	ALIVE	commercial	alt	Aquattack	ColecoVision/Aquattack (1984) (Interphase)/Aquattack (1984) (Interphase) [a1].col	947437ec	16384	skip	13	737	10	true	20270	1bf7
+8	ALIVE	commercial	good	Aquattack	ColecoVision/Aquattack (1984) (Interphase)/Aquattack (1984) (Interphase).col	275a7013	16384	skip	13	737	10	true	20270	1bf7
+9	ALIVE	commercial	good	Artillery Duel	ColecoVision/Artillery Duel (1983) (Xonox).col	adfa09e2	16384	skip	0	1463	2	false	8191	8321
+10	ALIVE	commercial	alt	BC's Quest for Tires	ColecoVision/BC's Quest for Tires (1983) (Sierravision)/BC's Quest for Tires (1983) (Sierravision) [a1].col	d07d5e97	16384	skip	2	0	2	true	16382	aa73
+11	ALIVE	commercial	good	BC's Quest for Tires	ColecoVision/BC's Quest for Tires (1983) (Sierravision)/BC's Quest for Tires (1983) (Sierravision).col	4359a3e5	16384	skip	2	0	2	true	16382	aa73
+12	ALIVE	commercial	alt	BC's Quest for Tires II - Grog's Revenge	ColecoVision/BC's Quest for Tires II - Grog's Revenge (1984)/BC's Quest for Tires II - Grog's Revenge (1984) (24k) [a1].col	9ebe5d98	24576	skip	2	1463	9	true	0	815a
+13	BLANK	commercial	bad	BC's Quest for Tires II - Grog's Revenge	ColecoVision/BC's Quest for Tires II - Grog's Revenge (1984)/BC's Quest for Tires II - Grog's Revenge (1984) (32k) [b1].col	0ea6a6fc	32768	skip	12	0	1	false	0	81e9
+14	ALIVE	commercial	good	BC's Quest for Tires II - Grog's Revenge	ColecoVision/BC's Quest for Tires II - Grog's Revenge (1984)/BC's Quest for Tires II - Grog's Revenge (1984) (32k).col	ca7fe4ce	32768	skip	12	1450	9	true	0	81e8
+15	ALIVE	commercial	good	Beamrider	ColecoVision/Beamrider (1983) (Activision) [!].col	2e8e9d42	16384	skip	0	1462	7	true	7037	868a
+16	ALIVE	commercial	good	Blockade Runner	ColecoVision/Blockade Runner (1984) (Interphase).col	da29c284	16384	skip	11	685	12	true	9460	1cac
+17	ALIVE	commercial	good	Boulder Dash	ColecoVision/Boulder Dash (1984) (Micro Fun, Telegames)/Boulder Dash (1984) (Micro Fun).col	1796de5e	16384	skip	8	1493	6	true	8210	9577
+18	ALIVE	commercial	trainer	Boulder Dash	ColecoVision/Boulder Dash (1984) (Micro Fun, Telegames)/Boulder Dash (1984) (Telegames) [t1] (50 Men).col	6e5c4b11	16384	skip	8	1493	6	true	8210	9577
+19	ALIVE	commercial	trainer	Boulder Dash	ColecoVision/Boulder Dash (1984) (Micro Fun, Telegames)/Boulder Dash (1984) (Telegames) [t2] (9 Men).col	5933ac18	16384	skip	8	1493	6	true	8210	9577
+20	ALIVE	commercial	good	Brain Strainers	ColecoVision/Brain Strainers (1984) (Carousel).col	829c967d	16384	title	18	0	6	false	4105	11ac
+21	ALIVE	commercial	alt	Buck Rogers - Planet of Zoom	ColecoVision/Buck Rogers - Planet of Zoom (1983) (Sega)/Buck Rogers - Planet of Zoom (1983) (Sega) [a1].col	2e63d09e	32768	title	25	531	5	true	23695	1c35
+22	ALIVE	commercial	good	Buck Rogers - Planet of Zoom	ColecoVision/Buck Rogers - Planet of Zoom (1983) (Sega)/Buck Rogers - Planet of Zoom (1983) (Sega).col	1baf661e	24576	title	25	531	5	true	23695	1c35
+23	ALIVE	commercial	good	Bump 'N' Jump	ColecoVision/Bump 'N' Jump (1982-84) (Mattel, Data East)/Bump 'N' Jump (1982-84) (Data East).col	002b22d4	24576	title	30	291	9	true	12315	09de
+24	ALIVE	commercial	good	Bump 'N' Jump	ColecoVision/Bump 'N' Jump (1982-84) (Mattel, Data East)/Bump 'N' Jump (1982-84) (Mattel) (Prototype).col	eb498f97	16384	skip	2	882	10	true	19865	0a18
+25	ALIVE	commercial	good	Burgertime	ColecoVision/Burgertime (1982-84) (Mattel, Data East)/Burgertime (1982-83) (Mattel) (Prototype).col	e5c5ea20	16384	skip	4	1470	2	true	10611	8400
+26	ALIVE	commercial	good	Burgertime	ColecoVision/Burgertime (1982-84) (Mattel, Data East)/Burgertime (1982-84) (Data East).col	91346341	16384	title	25	726	14	true	12838	bda0
+27	ALIVE	commercial	good	Cabbage Patch Kids - Adventure in the Park	ColecoVision/Cabbage Patch Kids - Adventure in the Park (1983)/Cabbage Patch Kids - Adventure in the Park (1983).col	beacbff5	16384	title	13	1447	12	true	9783	80e8
+28	ALIVE	commercial	good	Cabbage Patch Kids - Adventures in the Park	ColecoVision/Cabbage Patch Kids - Adventure in the Park (1983)/Cabbage Patch Kids - Adventures in the Park (1983) (Proto).col	f9d56307	16384	skip	0	1233	12	true	9783	80e8
+29	ALIVE	commercial	good	Cabbage Patch Kids Picture Show	ColecoVision/Cabbage Patch Kids Picture Show (1984).col	0c25ad84	24576	skip	16	1473	11	true	10336	839c
+30	ALIVE	commercial	good	Campaign '84	ColecoVision/Campaign '84 (1983) (Sunrise).col	72aceac7	16384	skip	11	1341	5	false	819	93aa
+31	ALIVE	commercial	alt	Carnival	ColecoVision/Carnival (1982)/Carnival (1982) [a1].col	d568c4c5	16384	title	32	0	7	true	24573	a973
+32	ALIVE	commercial	good	Carnival	ColecoVision/Carnival (1982)/Carnival (1982).col	32bff3f3	16384	title	32	0	7	true	24573	a973
+33	ALIVE	commercial	good	Centipede	ColecoVision/Centipede (1983) (Atarisoft).col	17edbfd4	16384	skip	0	1299	7	true	5180	a004
+34	ALIVE	commercial	bad	Choplifter	ColecoVision/Choplifter (1982-84) (Broderbund)/Choplifter (1982-84) (Broderbund) [b1].col	e7a1ff9f	16384	title	36	1448	8	true	17117	88bc
+35	ALIVE	commercial	good	Choplifter	ColecoVision/Choplifter (1982-84) (Broderbund)/Choplifter (1982-84) (Broderbund).col	030e0d48	16384	title	36	1448	8	true	17117	88bc
+36	ALIVE	commercial	good	Chuck Norris - Super Kicks	ColecoVision/Chuck Norris - Super Kicks (1983) (Xonox).col	73e96e53	16384	skip	35	1385	9	true	24573	1d0f
+37	NO_CART	commercial	good	ColecoVision Monitor Test	ColecoVision/ColecoVision Monitor Test (1982).col	71ae16ed	16384	none	-	0	8	false	0	196f
+38	ALIVE	commercial	good	Congo Bongo	ColecoVision/Congo Bongo (1984).col	ddafb16f	24576	title	26	0	9	true	13378	8636
+39	ALIVE	commercial	alt	Cosmic Avenger	ColecoVision/Cosmic Avenger (1982) (Universal)/Cosmic Avenger (1982) (Universal) [a1].col	39d4215b	16384	title	25	1461	10	true	21550	965a
+40	ALIVE	commercial	good	Cosmic Avenger	ColecoVision/Cosmic Avenger (1982) (Universal)/Cosmic Avenger (1982) (Universal).col	14d6ced6	16384	title	25	1461	10	true	21550	965a
+41	ALIVE	commercial	good	Cosmic Crisis	ColecoVision/Cosmic Crisis (1983) (Bit Corp).col	3a581cae	32768	title	15	1469	6	true	16382	8126
+42	ALIVE	commercial	good	Dam Busters, The	ColecoVision/Dam Busters, The (1984).col	c75fad5a	32768	skip	16	501	7	true	12726	9a9c
+43	ALIVE	commercial	good	Dance Fantasy	ColecoVision/Dance Fantasy (1984) (Fisher-Price).col	bff86a98	8192	skip	1	1500	8	false	3261	9eb5
+44	ALIVE	commercial	good	Decathlon	ColecoVision/Decathlon (1983) (Activision).col	614bb621	16384	skip	11	1480	8	true	8210	9fcf
+45	ALIVE	commercial	good	Defender	ColecoVision/Defender (1983) (Atarisoft).col	ffd16997	24576	skip	0	722	12	true	10781	aa71
+46	ALIVE	commercial	good	Destructor	ColecoVision/Destructor (1984) (Coleco).col	56c358a6	32768	title	47	737	11	false	10267	12c1
+47	ALIVE	commercial	good	Dig Dug	ColecoVision/Dig Dug (1983) (Atarisoft)/Dig Dug (1983) (Atarisoft) (Prototype) [o1].col	1fe02bbc	25088	skip	0	1427	8	true	5180	a4c5
+48	ALIVE	commercial	good	Dig Dug	ColecoVision/Dig Dug (1983) (Atarisoft)/Dig Dug (1983) (Atarisoft) (Prototype).col	1038e0a1	24576	skip	0	1427	8	true	5180	a4c5
+49	ALIVE	commercial	good	Donkey Kong	ColecoVision/Donkey Kong (1982)/Donkey Kong (1982).col	3c77198c	16384	title	13	724	9	true	13359	06d8
+50	ALIVE	commercial	good	Donkey Kong for Adam	ColecoVision/Donkey Kong (1982)/Donkey Kong for Adam (1982).col	94c4cd4a	24576	title	25	723	9	true	13359	d81e
+51	ALIVE	commercial	good	Donkey Kong Jr	ColecoVision/Donkey Kong Jr (1982-83).col	fd11508d	16384	title	27	1447	12	true	8789	9602
+52	STATIC	commercial	good	Dr. Seuss's Fix-Up The Mix-Up Puzzler	ColecoVision/Dr. Seuss's Fix-Up The Mix-Up Puzzler (1984) (Coleco).col	109699e2	16384	title	13	0	9	false	0	8441
+53	ALIVE	commercial	good	DragonFire	ColecoVision/DragonFire (1984) (Imagic).col	dcb8f9e8	16384	title	17	1457	12	true	11452	83ba
+54	ALIVE	commercial	good	Dukes of Hazzard, The	ColecoVision/Dukes of Hazzard, The (1984) (Warner Bros).col	4025ac94	32768	title	35	1273	8	true	19707	e278
+55	ALIVE	commercial	good	Escape From The Mind Master	ColecoVision/Escape From The Mind Master (1983) (Starpath) (Prototype).col	3678ab6f	16384	skip	12	1459	8	false	10620	8f47
+56	ALIVE	commercial	good	Evolution	ColecoVision/Evolution (1983) (Sydney).col	dff01cf7	16384	skip	2	0	7	true	19518	98b8
+57	STATIC	commercial	good	Facemaker	ColecoVision/Facemaker (1983) (Spinnaker)/Facemaker (1983) (Spinnaker) [!].col	ec9dfb07	8192	skip	18	0	3	false	0	0040
+58	BLANK	commercial	bad	Facemaker	ColecoVision/Facemaker (1983) (Spinnaker)/Facemaker (1983) (Spinnaker) [b1].col	448fed54	8192	skip	18	1	1	false	0	0038
+59	ALIVE	commercial	good	Fall Guy	ColecoVision/Fall Guy (1983) (20th Century Fox) (Prototype).col	1bed9c5b	28672	skip	11	1465	13	false	16382	8861
+60	ALIVE	commercial	good	Fathom	ColecoVision/Fathom (1983) (Imagic).col	9eb58823	16384	title	17	1452	4	true	1298	8564
+61	ALIVE	commercial	good	Final Test Cartridge	ColecoVision/Final Test Cartridge (19xx).col	48ff87cf	8192	skip	0	209	2	false	8191	86ce
+62	ALIVE	commercial	good	Flipper Slipper	ColecoVision/Flipper Slipper (1983) (Spectravideo).col	7e97a22e	16384	skip	0	715	11	true	5136	a17f
+63	ALIVE	commercial	good	Fortune Builder	ColecoVision/Fortune Builder (1984) (Circuits and Systems).col	65bbbcb4	32768	title	17	0	8	false	9222	1fdc
+64	ALIVE	commercial	good	Fraction Fever	ColecoVision/Fraction Fever (1983) (Spinnaker).col	964db3bc	8192	skip	16	1449	7	true	28678	97d6
+65	ALIVE	commercial	good	Frantic Freddy	ColecoVision/Frantic Freddy (1983) (Spectravideo).col	8615c6e8	16384	skip	0	719	11	true	4647	836e
+66	ALIVE	commercial	alt	Frenzy!	ColecoVision/Frenzy! (1982-83)/Frenzy! (1982-83) [a1].col	960616af	24576	title	25	0	7	true	11686	1ba6
+67	ALIVE	commercial	good	Frenzy!	ColecoVision/Frenzy! (1982-83)/Frenzy! (1982-83).col	bf1ccf04	24576	title	25	0	7	true	11686	1ba6
+68	ALIVE	commercial	good	Frogger	ColecoVision/Frogger (1982-83) (Parker Bros)/Frogger (1982-83) (Parker Bros) [o1].col	32b95be0	16384	skip	5	1500	9	true	0	1d18
+69	ALIVE	commercial	good	Frogger	ColecoVision/Frogger (1982-83) (Parker Bros)/Frogger (1982-83) (Parker Bros).col	798002a2	12288	skip	5	1500	9	true	0	1d18
+70	ALIVE	commercial	good	Frogger II - ThreeDeep!	ColecoVision/Frogger II - ThreeDeep! (1984) (Parker Bros).col	04405423	16384	skip	13	702	11	true	13012	80fa
+71	ALIVE	commercial	alt	Frontline	ColecoVision/Frontline (1983) (Taito)/Frontline (1983) (Taito) [a1].col	08990b8f	32768	title	15	1477	10	false	11674	a8cd
+72	ALIVE	commercial	good	Frontline	ColecoVision/Frontline (1983) (Taito)/Frontline (1983) (Taito).col	9c551386	24576	title	15	1477	10	false	11674	a8cd
+73	ALIVE	commercial	alt	Galaxian	ColecoVision/Galaxian (1983) (Atarisoft)/Galaxian (1983) (Atarisoft) [a1].col	987bc7ac	32768	skip	0	1462	11	true	4279	8406
+74	ALIVE	commercial	alt	Galaxian	ColecoVision/Galaxian (1983) (Atarisoft)/Galaxian (1983) (Atarisoft) [a2].col	6a7a162a	20480	skip	0	1462	11	true	4279	8406
+75	ALIVE	commercial	alt	Galaxian	ColecoVision/Galaxian (1983) (Atarisoft)/Galaxian (1983) (Atarisoft) [a3].col	518f84e8	32768	skip	0	1462	11	true	4279	8406
+76	ALIVE	commercial	good	Galaxian	ColecoVision/Galaxian (1983) (Atarisoft)/Galaxian (1983) (Atarisoft).col	3f18ba6c	24576	skip	0	1462	11	true	4279	8406
+77	STATIC	commercial	good	Gateway to Apshai	ColecoVision/Gateway to Apshai (1984) (Epyx).col	0726b64d	16384	skip	0	1486	2	false	0	84ad
+78	ALIVE	commercial	bad	Gorf	ColecoVision/Gorf (1981-83) (Midway)/Gorf (1981-83) (Midway) [b1].col	074ea085	16384	title	27	1468	7	true	9285	a876
+79	ALIVE	commercial	good	Gorf	ColecoVision/Gorf (1981-83) (Midway)/Gorf (1981-83) (Midway).col	ff46becc	16384	title	27	1468	7	true	9285	a876
+80	ALIVE	commercial	good	Gust Buster	ColecoVision/Gust Buster (1983) (Sunrise).col	f2cac67c	16384	skip	1	1499	11	false	3355	8097
+81	ALIVE	commercial	good	Gyruss	ColecoVision/Gyruss (1984) (Parker Bros).col	b4ef0f1f	16384	skip	12	1470	6	true	7770	1d14
+82	ALIVE	commercial	good	H.E.R.O.	ColecoVision/H.E.R.O. (1984) (Activision).col	685ab9b5	16384	skip	11	1476	13	false	9273	8257
+83	ALIVE	commercial	alt	Heist, The	ColecoVision/Heist, The (1983) (Micro Fun)/Heist, The (1983) (Micro Fun) [a1].col	866849d1	32768	skip	0	568	9	true	10336	8c26
+84	ALIVE	commercial	trainer	Heist, The	ColecoVision/Heist, The (1983) (Micro Fun)/Heist, The (1983) (Micro Fun) [t1] (50 Men).col	bc3b9f78	24576	skip	0	568	9	true	10336	8c0a
+85	ALIVE	commercial	trainer	Heist, The	ColecoVision/Heist, The (1983) (Micro Fun)/Heist, The (1983) (Micro Fun) [t2] (8 Men).col	b0f5dcb4	24576	skip	0	568	9	true	10336	8c26
+86	ALIVE	commercial	good	Heist, The	ColecoVision/Heist, The (1983) (Micro Fun)/Heist, The (1983) (Micro Fun).col	6f2e2d84	24576	skip	0	568	9	true	10336	8c26
+87	ALIVE	commercial	bad	Illusions	ColecoVision/Illusions (1984) (Nice Ideas)/Illusions (1984) (Nice Ideas) [b1].col	c9893041	16384	title	26	694	8	true	18972	809e
+88	ALIVE	commercial	good	Illusions	ColecoVision/Illusions (1984) (Nice Ideas)/Illusions (1984) (Nice Ideas).col	2787516d	16384	title	26	694	8	true	18972	809e
+89	ALIVE	commercial	good	Its Only Rock 'N' Roll	ColecoVision/Its Only Rock 'N' Roll (1984) (Xonox).col	cc43ebf7	16384	skip	11	1393	3	false	2057	825a
+90	ALIVE	commercial	good	James Bond 007	ColecoVision/James Bond 007 (1984) (Parker Bros).col	3004a253	16384	skip	12	1433	3	true	11330	914c
+91	ALIVE	commercial	good	Joust	ColecoVision/Joust (1983) (Atarisoft) (Prototype).col	52228000	24576	skip	0	1330	8	true	0	87f0
+92	ALIVE	commercial	good	Juke Box	ColecoVision/Juke Box (1984) (Spinnaker).col	a5511418	8192	skip	11	1471	8	true	10800	8d60
+93	ALIVE	commercial	good	JBulman Junior	ColecoVision/Jumpman Junior (1984) (Epyx)/JBulman Junior (Jumpman Jr. Hack) by Daniel Bienvenu (1997).col	ba0434f1	16384	skip	13	1459	7	true	9956	adc9
+94	ALIVE	commercial	alt	Jumpman Junior	ColecoVision/Jumpman Junior (1984) (Epyx)/Jumpman Junior (1984) (Epyx) [a1].col	9528949a	16384	skip	13	1459	7	true	9956	adc9
+95	ALIVE	commercial	good	Jumpman Junior	ColecoVision/Jumpman Junior (1984) (Epyx)/Jumpman Junior (1984) (Epyx).col	060c69e8	16384	skip	13	1459	7	true	9956	adc9
+96	ALIVE	commercial	good	Jungle Hunt	ColecoVision/Jungle Hunt (1983) (Atarisoft).col	e8858484	24576	skip	0	1459	7	true	7366	b078
+97	ALIVE	commercial	bad	Ken Uston's Blackjack-Poker	ColecoVision/Ken Uston's Blackjack-Poker (1983)/Ken Uston's Blackjack-Poker (1983) [b1].col	1f5f8571	16384	title	14	0	2	false	16382	8695
+98	ALIVE	commercial	good	Ken Uston's Blackjack-Poker	ColecoVision/Ken Uston's Blackjack-Poker (1983)/Ken Uston's Blackjack-Poker (1983).col	8c7b7803	16384	title	14	0	2	false	16382	8695
+99	ALIVE	commercial	good	Keystone Kapers	ColecoVision/Keystone Kapers (1983-84) (Activision).col	fad8d414	16384	skip	3	1487	13	true	6506	8bba
+100	ALIVE	commercial	good	Lady Bug	ColecoVision/Lady Bug (1982) (Universal).col	2c3097b8	16384	title	25	1465	9	true	9956	8578
+101	ALIVE	commercial	good	Learning With Leeper	ColecoVision/Learning With Leeper (1983) (Sierravision) [!].col	1641044f	16384	skip	10	1468	8	true	8191	bd60
+102	ALIVE	commercial	good	Linking Logic	ColecoVision/Linking Logic (1984) (Fisher-Price).col	918f12c0	8192	skip	15	1344	11	true	8191	10d3
+103	ALIVE	commercial	good	Logic Levels	ColecoVision/Logic Levels (1984) (Fisher-Price).col	c28d7062	16384	skip	14	1457	9	false	16382	10e6
+104	BLANK	commercial	bad	Looping	ColecoVision/Looping (1983) (Venture Line)/Looping (1983) (Venture Line) [b1].col	472f8cf6	16384	title	25	1405	2	false	8191	1d18
+105	BLANK	commercial	good	Looping	ColecoVision/Looping (1983) (Venture Line)/Looping (1983) (Venture Line).col	6a2d637b	16384	title	25	1405	2	false	8191	1d18
+106	ALIVE	commercial	good	M.A.S.H.	ColecoVision/M.A.S.H. (1983) (20th Century Fox) (Prototype).col	fc95b302	16384	skip	20	1427	11	true	8191	8f2d
+107	ALIVE	commercial	good	Matt Patrol	ColecoVision/Matt Patrol (1984) (Atarisoft) (Prototype).col	90007079	32768	skip	0	1414	10	true	4902	84a9
+108	ALIVE	commercial	good	Memory Manor	ColecoVision/Memory Manor (1984) (Fisher-Price)/Memory Manor (1984) (Fisher-Price) [o1].col	861c9825	16384	skip	0	1497	11	true	24573	119c
+109	ALIVE	commercial	good	Memory Manor	ColecoVision/Memory Manor (1984) (Fisher-Price)/Memory Manor (1984) (Fisher-Price).col	bab520ea	8192	skip	0	1497	11	true	24573	119c
+110	ALIVE	commercial	good	Meteoric Shower	ColecoVision/Meteoric Shower (1983) (Bit Corp).col	3beffc06	16384	title	14	1304	8	true	5739	90ed
+111	ALIVE	commercial	alt	Miner 2049er	ColecoVision/Miner 2049er (1983) (Micro Fun)/Miner 2049er (1983) (Micro Fun) [a1].col	b24f10fd	24576	skip	0	0	14	true	5168	91eb
+112	ALIVE	commercial	trainer	Miner 2049er	ColecoVision/Miner 2049er (1983) (Micro Fun)/Miner 2049er (1983) (Micro Fun) [t1] (50 Men).col	a838c819	24576	skip	0	0	14	true	5168	921c
+113	ALIVE	commercial	trainer	Miner 2049er	ColecoVision/Miner 2049er (1983) (Micro Fun)/Miner 2049er (1983) (Micro Fun) [t2] (8 Men).col	223c4926	24576	skip	0	0	14	true	5168	921c
+114	ALIVE	commercial	good	Miner 2049er	ColecoVision/Miner 2049er (1983) (Micro Fun)/Miner 2049er (1983) (Micro Fun).col	71d1bd4d	24576	skip	0	0	14	true	5168	91eb
+115	ALIVE	commercial	good	Monkey Academy	ColecoVision/Monkey Academy (1984) (Konami)/Monkey Academy (1984) (Konami) (Prototype).col	d1e8df85	16384	skip	0	1492	9	true	8191	81ec
+116	ALIVE	commercial	good	Monkey Academy	ColecoVision/Monkey Academy (1984) (Konami)/Monkey Academy (1984) (Konami) [o1].col	26fd822a	32768	skip	0	1490	2	false	7366	814b
+117	ALIVE	commercial	good	Monkey Academy	ColecoVision/Monkey Academy (1984) (Konami)/Monkey Academy (1984) (Konami).col	f06592bf	24576	skip	0	1490	2	false	7366	814b
+118	ALIVE	commercial	good	Montezuma's Revenge	ColecoVision/Montezuma's Revenge (1984) (Parker Bros).col	0bd9d073	16384	skip	12	698	8	true	8268	1bef
+119	STATIC	commercial	alt	Moonsweeper	ColecoVision/Moonsweeper (1983) (Imagic)/Moonsweeper (1983) (Imagic) [a1].col	c521bcad	16384	title	26	1416	10	false	0	9c5d
+120	STATIC	commercial	good	Moonsweeper	ColecoVision/Moonsweeper (1983) (Imagic)/Moonsweeper (1983) (Imagic).col	8a303f5a	16384	title	26	1416	10	false	0	9c5d
+121	ALIVE	commercial	alt	Motocross Racer	ColecoVision/Motocross Racer (1984) (Xonox)/Motocross Racer (1984) (Xonox) [a1].col	0f4d800a	16384	skip	1	1499	8	true	6522	8b47
+122	ALIVE	commercial	good	Motocross Racer	ColecoVision/Motocross Racer (1984) (Xonox)/Motocross Racer (1984) (Xonox).col	935ebe62	16384	skip	1	1499	8	true	6522	8b47
+123	ALIVE	commercial	good	Mountain King	ColecoVision/Mountain King (1983-84) (Sunrise)/Mountain King (1983-84) (Sunrise) [!].col	d8d73246	16384	skip	2	1438	6	true	0	804f
+124	ALIVE	commercial	alt	Mountain King	ColecoVision/Mountain King (1983-84) (Sunrise)/Mountain King (1983-84) (Sunrise) [a1].col	c173bbec	16384	skip	2	1438	6	true	0	804f
+125	ALIVE	commercial	good	Mousetrap	ColecoVision/Mousetrap (1982) (Exidy)/Mousetrap (1982) (Exidy) [o1].col	fd8b79b3	16384	title	24	733	8	true	5412	aace
+126	ALIVE	commercial	good	Mousetrap	ColecoVision/Mousetrap (1982) (Exidy)/Mousetrap (1982) (Exidy).col	de47c29f	12288	title	24	733	8	true	5412	aace
+127	ALIVE	commercial	alt	Mr. Do!	ColecoVision/Mr. Do! (1983) (Universal)/Mr. Do! (1983) (Universal) [a1].col	d53e4bdf	24576	title	13	703	2	false	8579	0289
+128	ALIVE	commercial	good	Mr. Do!	ColecoVision/Mr. Do! (1983) (Universal)/Mr. Do! (1983) (Universal).col	461ab6ad	24576	title	13	703	2	false	8579	0289
+129	ALIVE	commercial	bad	Mr. Do's Castle	ColecoVision/Mr. Do's Castle (1983) (Parker Bros)/Mr. Do's Castle (1983) (Parker Bros) [b1].col	546f2c54	12288	skip	11	1411	11	true	13609	934e
+130	ALIVE	commercial	good	Mr. Do's Castle	ColecoVision/Mr. Do's Castle (1983) (Parker Bros)/Mr. Do's Castle (1983) (Parker Bros).col	ef7e9562	16384	skip	11	1411	11	true	13609	934e
+131	ALIVE	commercial	good	Ms. Space Fury	ColecoVision/Ms. Space Fury (Digital Press) (2001).col	dffd8cb4	32256	skip	11	1393	12	true	24573	8182
+132	STATIC	commercial	good	Nova Blast	ColecoVision/Nova Blast (1983) (Imagic)/Nova Blast (1983) (Imagic) [!].col	ea06f585	16384	title	13	0	11	false	0	1256
+133	STATIC	commercial	alt	Nova Blast	ColecoVision/Nova Blast (1983) (Imagic)/Nova Blast (1983) (Imagic) [a1][!].col	3af1b5f7	16384	skip	0	0	11	false	0	1285
+134	ALIVE	commercial	bad	Oil's Well	ColecoVision/Oil's Well (1984) (Sierravision)/Oil's Well (1984) (Sierravision) [b1].col	d2256b6c	16384	skip	19	1462	8	true	23695	88d7
+135	ALIVE	commercial	good	Oil's Well	ColecoVision/Oil's Well (1984) (Sierravision)/Oil's Well (1984) (Sierravision).col	add10242	16384	skip	19	1462	8	true	23695	88d7
+136	STATIC	commercial	good	Omega Race	ColecoVision/Omega Race (1981-83) (Midway).col	9921ecb5	16384	title	33	0	2	false	0	1215
+137	ALIVE	commercial	good	One on One Basketball	ColecoVision/One on One Basketball (1984) (Micro Fun).col	17c77c3a	24576	skip	0	1492	3	true	8191	a696
+138	ALIVE	commercial	good	Pac-Man	ColecoVision/Pac-Man (1983) (Atarisoft)/Pac-Man (1983) (Atarisoft) (Prototype) [o1].col	1c7c99d8	16896	skip	0	1266	9	true	7366	a96e
+139	ALIVE	commercial	good	Pac-Man	ColecoVision/Pac-Man (1983) (Atarisoft)/Pac-Man (1983) (Atarisoft) (Prototype).col	a40a07e8	16384	skip	0	1266	9	true	7366	a96e
+140	ALIVE	commercial	good	Pepper II	ColecoVision/Pepper II (1983) (Exidy).col	53b85e20	16384	title	31	704	8	true	8436	ab15
+141	ALIVE	commercial	good	Pitfall II - Lost Caverns	ColecoVision/Pitfall II - Lost Caverns (1983-84) (Activision).col	851a455f	16384	skip	0	902	10	false	7224	b8ed
+142	ALIVE	commercial	good	Pitfall!	ColecoVision/Pitfall! (1983) (Activision)/Pitfall! (1983) (Activision) [!].col	d4f180df	16384	skip	0	1467	9	true	5180	8176
+143	ALIVE	commercial	bad	Pitfall!	ColecoVision/Pitfall! (1983) (Activision)/Pitfall! (1983) (Activision) [b1].col	312ae55a	16384	skip	0	1467	9	true	5180	8176
+144	ALIVE	commercial	alt	Pitstop	ColecoVision/Pitstop (1983) (Epyx)/Pitstop (1983) (Epyx) [a1].col	81be4f55	16384	skip	0	1434	10	true	5168	93a7
+145	ALIVE	commercial	alt	Pitstop	ColecoVision/Pitstop (1983) (Epyx)/Pitstop (1983) (Epyx) [a2].col	1e455299	16384	skip	0	1434	10	true	5168	93a7
+146	ALIVE	commercial	good	Pitstop	ColecoVision/Pitstop (1983) (Epyx)/Pitstop (1983) (Epyx).col	e627fcf0	16384	skip	0	1434	10	true	5168	93a7
+147	ALIVE	commercial	alt	Popeye	ColecoVision/Popeye (1983) (Parker Bros)/Popeye (1983) (Parker Bros) [a1].col	3ef1d0ee	16384	skip	22	712	15	true	10336	1d16
+148	ALIVE	commercial	good	Popeye	ColecoVision/Popeye (1983) (Parker Bros)/Popeye (1983) (Parker Bros).col	a095454d	16384	skip	22	712	15	true	10336	1d16
+149	ALIVE	commercial	good	Porky's	ColecoVision/Porky's (1983) (20th Century Fox) (Prototype).col	46fc1c00	16384	skip	23	712	14	true	2117	9f9b
+150	ALIVE	commercial	good	Power Lords - Quest for Volcan	ColecoVision/Power Lords - Quest for Volcan (1983) (Prototype).col	caa61d8d	32768	skip	7	1491	5	true	16382	818c
+151	ALIVE	pd	good	Adventurium3 Demo	ColecoVision/Public Domain/Adventurium3 Demo (2000) (PD).col	6cd063aa	14464	skip	26	1474	2	false	24573	85d7
+152	ALIVE	pd	good	Air Battle V0.4 by Daniel Bienvenu	ColecoVision/Public Domain/Air Battle V0.4 by Daniel Bienvenu (July 10) (2000) (PD).col	7c66aba6	23808	skip	11	1469	10	true	19865	9a19
+153	STATIC	pd	good	Amazing Snake Beta 4 by Serge-Eric Tremblay	ColecoVision/Public Domain/Amazing Snake Beta 4 by Serge-Eric Tremblay (2001) (PD).col	af01e7dd	29952	skip	11	1455	9	false	0	dbd3
+154	STATIC	pd	good	Amazing Snake Beta 5 by Serge-Eric Tremblay	ColecoVision/Public Domain/Amazing Snake Beta 5 by Serge-Eric Tremblay (2001) (PD).col	5ba1a6c8	31744	skip	11	1455	9	false	0	e06e
+155	STATIC	pd	good	Amazing Snake Beta X by Serge-Eric Tremblay	ColecoVision/Public Domain/Amazing Snake Beta X by Serge-Eric Tremblay (2001) (PD).col	7da41b23	19200	skip	11	1456	8	false	0	b669
+156	ALIVE	pd	good	BUsTin-Out Demo 0.5 by Daniel Bienvenu	ColecoVision/Public Domain/BUsTin-Out Demo 0.5 by Daniel Bienvenu (2000) (PD).col	c74766d8	32384	skip	11	1452	15	true	11452	8eef
+157	ALIVE	pd	good	BUsTin-Out Volume 0 by Daniel Bienvenu	ColecoVision/Public Domain/BUsTin-Out Volume 0 by Daniel Bienvenu (2000) (PD).col	edca3a1f	32768	skip	11	1457	8	true	10248	9441
+158	ALIVE	pd	good	BUsTin-Out Volume 1 by Daniel Bienvenu	ColecoVision/Public Domain/BUsTin-Out Volume 1 by Daniel Bienvenu (2000) (PD).col	97b601a2	32768	skip	11	1457	8	true	10248	9476
+159	ALIVE	pd	good	BUsTin-Out Volume 2 by Daniel Bienvenu	ColecoVision/Public Domain/BUsTin-Out Volume 2 by Daniel Bienvenu (2000) (PD).col	e12ccc1e	32640	skip	11	1457	8	true	10248	946d
+160	ALIVE	pd	good	BUsTin-Out Volume 3 by Daniel Bienvenu	ColecoVision/Public Domain/BUsTin-Out Volume 3 by Daniel Bienvenu (2000) (PD).col	c3a925af	32768	skip	11	1457	8	true	10248	946d
+161	ALIVE	pd	good	Bejeweled Demo by Daniel Bienvenu	ColecoVision/Public Domain/Bejeweled Demo by Daniel Bienvenu (2001) (PD).col	1ba0688f	16640	skip	12	1461	12	false	24573	a601
+162	ALIVE	pd	good	Breakout Paddle Demo by Daniel Bienvenu	ColecoVision/Public Domain/Breakout Paddle Demo by Daniel Bienvenu (Feb 12) (2001) (PD).col	8fd90a28	9600	skip	11	1461	11	false	8191	9222
+163	ALIVE	pd	good	Breakout by Daniel Bienvenu	ColecoVision/Public Domain/Breakout by Daniel Bienvenu (Feb 02) (1999) (PD).col	b05fb3ec	13696	skip	11	1454	10	true	9010	926f
+164	ALIVE	pd	good	Chateau du Dragon, Le by Daniel Bienvenu	ColecoVision/Public Domain/Chateau du Dragon, Le by Daniel Bienvenu (2001) (PD).col	43478adf	9088	skip	11	1380	2	true	0	91ec
+165	ALIVE	pd	good	Christmas Demo by Daniel Bienvenu	ColecoVision/Public Domain/Christmas Demo by Daniel Bienvenu (Dec 25) (2001) (PD).col	a23a566c	16896	skip	11	1483	8	true	24573	82b8
+166	ALIVE	pd	good	ColecoVision Noise Generator by Marcel de Kogel	ColecoVision/Public Domain/ColecoVision Noise Generator by Marcel de Kogel (1996) (PD).col	95051633	8192	skip	11	1489	3	false	8191	838f
+167	ALIVE	pd	good	Cosmo Challenge by Marcel de Kogel	ColecoVision/Public Domain/Cosmo Challenge by Marcel de Kogel (1997) (PD).col	43933306	21632	skip	11	1448	13	true	17439	8bb0
+168	STATIC	pd	good	Cosmo Challenge-Trainer Menu by Marcel de Kogel	ColecoVision/Public Domain/Cosmo Challenge-Trainer Menu by Marcel de Kogel (1997) (PD).col	55ee8840	8576	skip	11	1443	15	false	0	819e
+169	ALIVE	pd	good	Cosmo Fighter 2 by Marcel de Kogel	ColecoVision/Public Domain/Cosmo Fighter 2 by Marcel de Kogel (1996-97) (PD).col	d93a7dc2	16384	skip	13	1489	12	true	20487	1d45
+170	ALIVE	pd	good	Cosmo Fighter 3 Demo by Marcel de Kogel	ColecoVision/Public Domain/Cosmo Fighter 3 Demo by Marcel de Kogel (2001) (PD).col	901c8512	31744	skip	11	1463	10	true	14657	8906
+171	STATIC	pd	good	Cosmo Trainer by Marcel de Kogel	ColecoVision/Public Domain/Cosmo Trainer by Marcel de Kogel (1997) (PD).col	7ba2f186	21376	skip	11	1457	8	false	0	8495
+172	ALIVE	pd	good	Dacman	ColecoVision/Public Domain/Dacman (Aug 01) by Daniel Bienvenu (2000) (PD).col	5e4b3e68	22400	skip	11	1454	11	true	14697	ab40
+173	ALIVE	pd	good	Dacman	ColecoVision/Public Domain/Dacman (Aug 08) by Daniel Bienvenu (2000) (PD).col	3ee7a705	24576	skip	11	1447	11	true	14697	8155
+174	ALIVE	pd	good	Dacman	ColecoVision/Public Domain/Dacman (Aug 16) by Daniel Bienvenu (2000) (PD).col	9a46ef8d	24576	skip	11	1447	11	true	14697	8151
+175	STATIC	pd	good	Dacman	ColecoVision/Public Domain/Dacman (Jul 12) by Daniel Bienvenu (2000) (PD).col	07c68567	5504	skip	11	1462	8	false	0	8b1e
+176	ALIVE	pd	good	Dacman	ColecoVision/Public Domain/Dacman (Jul 16) by Daniel Bienvenu (2000) (PD).col	22f8a86b	14208	skip	11	1464	4	false	8191	9ca3
+177	ALIVE	pd	good	Dacman	ColecoVision/Public Domain/Dacman (Jul 17) by Daniel Bienvenu (2000) (PD).col	62cfdb1f	14080	skip	11	1464	4	false	8191	9c68
+178	ALIVE	pd	good	Dacman	ColecoVision/Public Domain/Dacman (Jul 18) by Daniel Bienvenu (2000) (PD).col	02dd4c68	16256	skip	11	1449	11	true	16382	9ce3
+179	ALIVE	pd	good	Dacman	ColecoVision/Public Domain/Dacman (Jul 19) by Daniel Bienvenu (2000) (PD).col	cdc4a7cc	17664	skip	11	1448	11	true	16382	9f83
+180	ALIVE	pd	good	Dacman	ColecoVision/Public Domain/Dacman (Jul 22) by Daniel Bienvenu (2000) (PD).col	c20fbf76	22272	skip	11	1454	11	true	19643	a9be
+181	ALIVE	pd	good	Dacman	ColecoVision/Public Domain/Dacman (Jul 28) by Daniel Bienvenu (2000) (PD).col	a67f0339	22272	skip	11	1454	11	true	19643	a9bb
+182	ALIVE	pd	good	Dacman	ColecoVision/Public Domain/Dacman (Jul 29) by Daniel Bienvenu (2000) (PD).col	e829ef78	22272	skip	11	1454	11	true	14697	9369
+183	ALIVE	pd	good	Demon2 Demo by Yannick Proulx	ColecoVision/Public Domain/Demon2 Demo by Yannick Proulx (2001) (PD).col	b3b3f3fe	8262	skip	0	0	4	true	0	81e9
+184	ALIVE	pd	good	Happy Halloween by Daniel Bienvenu	ColecoVision/Public Domain/Happy Halloween by Daniel Bienvenu (2001) (PD).col	527ae3ac	13824	skip	11	1460	9	true	24573	901a
+185	ALIVE	pd	alt	Kevtris by Kevin Horton	ColecoVision/Public Domain/Kevtris by Kevin Horton (1996) (PD) [a1].col	4e8dfc3c	16384	skip	0	855	8	false	16382	88ab
+186	ALIVE	pd	good	Kevtris by Kevin Horton	ColecoVision/Public Domain/Kevtris by Kevin Horton (1996) (PD).col	819a06e5	16384	skip	0	855	8	false	16382	88d4
+187	ALIVE	pd	good	Kill Barney in Tokyo by Daniel Bienvenu	ColecoVision/Public Domain/Kill Barney in Tokyo by Daniel Bienvenu (1997) (PD).col	d905c94b	9494	skip	12	0	13	true	0	85e4
+188	ALIVE	pd	good	Killer Instinct by Daniel Bienvenu	ColecoVision/Public Domain/Killer Instinct by Daniel Bienvenu (1997) (PD).col	58f10c63	9494	skip	12	0	8	true	0	9976
+189	ALIVE	pd	good	Music Vol 1 by Daniel Bienvenu	ColecoVision/Public Domain/Music Vol 1 by Daniel Bienvenu (2000) (PD).col	0f3d9216	5888	skip	22	1469	4	false	16382	8986
+190	BLANK	pd	bad	Nim by Daniel Bienvenu	ColecoVision/Public Domain/Nim by Daniel Bienvenu (Nov 03) (2000) (PD) [b1].col	9b8f6dad	6934	skip	22	0	1	false	0	18e0
+191	ALIVE	pd	good	Nim by Daniel Bienvenu	ColecoVision/Public Domain/Nim by Daniel Bienvenu (Nov 03) (2000) (PD).col	9c059a51	6912	skip	11	1462	3	false	8517	8cd8
+192	ALIVE	pd	good	Pere Noel by Daniel Bienvenu	ColecoVision/Public Domain/Pere Noel by Daniel Bienvenu (2000) (PD).col	3f84cc6c	14464	skip	26	1474	2	false	24573	85d7
+193	ALIVE	pd	good	Puckman Sounds V001	ColecoVision/Public Domain/Puckman Sounds V001 (2003) (PD).col	cfd41a7a	32768	skip	0	1456	6	false	14697	8bf3
+194	ALIVE	pd	good	Puckman Sounds V002	ColecoVision/Public Domain/Puckman Sounds V002 (2003) (PD).col	913bb176	32768	skip	0	1456	6	false	14697	8bf0
+195	ALIVE	pd	good	Puckman Sounds V003	ColecoVision/Public Domain/Puckman Sounds V003 (2003) (PD).col	a7b81956	32768	skip	0	1456	6	false	14697	8bf8
+196	ALIVE	pd	good	Purple Dinosaur Massacre by John Dondzila	ColecoVision/Public Domain/Purple Dinosaur Massacre by John Dondzila (1996) (PD).col	137d6c4c	9494	skip	12	0	10	true	0	85e4
+197	ALIVE	pd	good	Reversi Demo by Daniel Bienvenu	ColecoVision/Public Domain/Reversi Demo by Daniel Bienvenu (2001) (PD).col	bbef9e8f	16512	skip	11	1461	7	false	16382	9f4d
+198	ALIVE	pd	good	Sound FX Vol 1 by Daniel Bienvenu	ColecoVision/Public Domain/Sound FX Vol 1 by Daniel Bienvenu (2000) (PD).col	0b619934	4608	skip	22	1469	3	false	8191	8a4b
+199	ALIVE	pd	good	Sound FX Vol 2 by Daniel Bienvenu	ColecoVision/Public Domain/Sound FX Vol 2 by Daniel Bienvenu (2000) (PD).col	040e3a9c	6912	skip	22	1469	3	false	8191	8ccd
+200	ALIVE	pd	good	Space Invaders Collection Pack Demo	ColecoVision/Public Domain/Space Invaders Collection Pack Demo (2002) (PD).col	5191bba9	16384	skip	0	1465	8	true	0	9a42
+201	ALIVE	pd	good	Space Invasion Demo by John Dondzila	ColecoVision/Public Domain/Space Invasion Demo by John Dondzila (Feb 06) (1998) (PD).col	1328d5c4	11292	skip	12	0	8	true	0	1d57
+202	ALIVE	pd	good	Space Invasion by John Dondzila	ColecoVision/Public Domain/Space Invasion by John Dondzila (1998) (PD).col	af9b178c	16384	skip	11	0	4	true	9489	8293
+203	ALIVE	pd	good	Spectank Demo by Daniel Bienvenu	ColecoVision/Public Domain/Spectank Demo by Daniel Bienvenu (2000) (PD).col	d5b4c25f	8704	skip	11	1461	6	true	8191	8313
+204	ALIVE	pd	good	St-Valentine's Day	ColecoVision/Public Domain/St-Valentine's Day (2002) (PD).col	83ec4f49	13440	skip	11	1452	5	true	8191	8c7c
+205	ALIVE	pd	good	St-Valentine's Day	ColecoVision/Public Domain/St-Valentine's Day (No Alien Head) (2002) (PD).col	52961076	9216	skip	11	1459	5	true	8191	8c4a
+206	ALIVE	pd	good	Star Fortress by John Dondzila	ColecoVision/Public Domain/Star Fortress by John Dondzila (1997) (PD).col	f7f18e6f	16384	skip	26	0	7	true	5168	8dfe
+207	ALIVE	pd	alt	Stubby Demo by Yannick Proulx	ColecoVision/Public Domain/Stubby Demo by Yannick Proulx (2001) (PD) [a1].col	2f9debf9	8192	title	13	0	5	true	0	81a4
+208	ALIVE	pd	good	Stubby Demo by Yannick Proulx	ColecoVision/Public Domain/Stubby Demo by Yannick Proulx (2001) (PD).col	26c348df	5440	skip	0	0	5	true	0	81c2
+209	ALIVE	pd	good	Superpong Demo	ColecoVision/Public Domain/Superpong Demo (2000) (PD).col	038d4e15	4480	skip	22	1446	6	true	11452	8e72
+210	ALIVE	pd	good	Tenchi Muyo Demo by Daniel Bienvenu	ColecoVision/Public Domain/Tenchi Muyo Demo by Daniel Bienvenu (2000) (PD).col	2f2df2ac	16896	skip	11	1482	11	false	13378	8a8d
+211	STATIC	pd	alt	Tic Tac Toe by Norman Nithman	ColecoVision/Public Domain/Tic Tac Toe by Norman Nithman (1996) (PD) [a1].col	969d77c8	3220	skip	2	1499	2	false	0	88e5
+212	STATIC	pd	good	Tic Tac Toe by Norman Nithman	ColecoVision/Public Domain/Tic Tac Toe by Norman Nithman (1996) (PD).col	9f22cd12	3233	skip	2	1499	2	false	0	88f2
+213	ALIVE	pd	good	Winky Trap by John Dondzila	ColecoVision/Public Domain/Winky Trap by John Dondzila (1997) (PD).col	eaa5f606	16384	title	24	733	8	true	5412	aace
+214	ALIVE	commercial	good	ELDCDBPAPP	ColecoVision/Q-bert (1983) (Parker Bros)/ELDCDBPAPP (Q-bert Hack).col	d3bd33e3	8192	skip	0	365	10	true	19518	815a
+215	ALIVE	commercial	alt	Q-bert	ColecoVision/Q-bert (1983) (Parker Bros)/Q-bert (1983) (Parker Bros) [a1].col	13f06adc	8192	skip	0	365	10	true	19518	815a
+216	ALIVE	commercial	good	Q-bert	ColecoVision/Q-bert (1983) (Parker Bros)/Q-bert (1983) (Parker Bros).col	532f61ba	8192	skip	0	365	10	true	19518	815a
+217	ALIVE	commercial	good	Q-bert II	ColecoVision/Q-bert II (1984) (Parker Bros).col	e45496d3	16384	skip	13	737	3	true	19518	8e5c
+218	ALIVE	commercial	good	Quest for Quintana Roo	ColecoVision/Quest for Quintana Roo (1983) (Sunrise)/Quest for Quintana Roo (1983) (Sunrise) [!].col	2d32b1f0	16384	skip	11	1488	7	true	3261	806b
+219	ALIVE	commercial	alt	Quest for Quintana Roo	ColecoVision/Quest for Quintana Roo (1983) (Sunrise)/Quest for Quintana Roo (1983) (Sunrise) [a1].col	eec81c42	16384	skip	11	1488	7	true	3261	806b
+220	ALIVE	commercial	good	River Raid	ColecoVision/River Raid (1982-84) (Activision) [!].col	fe897f9c	16384	skip	1	1434	6	true	16382	84a0
+221	ALIVE	commercial	alt	Robin Hood	ColecoVision/Robin Hood (1984) (Xonox)/Robin Hood (1984) (Xonox) [a1].col	0eb45d6e	16384	skip	1	1483	10	true	3691	b585
+222	ALIVE	commercial	good	Robin Hood	ColecoVision/Robin Hood (1984) (Xonox)/Robin Hood (1984) (Xonox).col	cdb8d3cf	16384	skip	1	1483	10	true	3691	b585
+223	ALIVE	commercial	good	Roc 'N Rope	ColecoVision/Roc 'N Rope (1983-84) (Konami).col	3caca004	24576	title	25	1474	15	true	11863	87ab
+224	ALIVE	commercial	alt	Rock 'N' Bolt	ColecoVision/Rock 'N' Bolt (1984) (Telegames)/Rock 'N' Bolt (1984) (Telegames) [a1].col	af49a0c3	16384	skip	0	1463	13	true	16382	a65c
+225	ALIVE	commercial	good	Rock 'N' Bolt	ColecoVision/Rock 'N' Bolt (1984) (Telegames)/Rock 'N' Bolt (1984) (Telegames).col	522b59b9	16384	skip	0	1463	13	true	16382	a65c
+226	ALIVE	commercial	good	Rocky Super-Action Boxing	ColecoVision/Rocky Super-Action Boxing (1983) (Coleco).col	046f4b70	24576	title	24	1455	12	true	23184	1caf
+227	ALIVE	commercial	good	Rolloverture	ColecoVision/Rolloverture (1983) (Sunrise).col	e4585c0a	16384	skip	13	1380	13	true	6522	1d18
+228	ALIVE	commercial	alt	Sammy Lightfoot	ColecoVision/Sammy Lightfoot (1983) (Sierravision)/Sammy Lightfoot (1983) (Sierravision) [a1].col	3563286b	16384	skip	14	1397	9	true	4105	0132
+229	ALIVE	commercial	good	Sammy Lightfoot	ColecoVision/Sammy Lightfoot (1983) (Sierravision)/Sammy Lightfoot (1983) (Sierravision).col	c5f69a1b	16384	skip	14	1397	9	true	4105	0132
+230	ALIVE	commercial	alt	Sector Alpha	ColecoVision/Sector Alpha (1983) (Spectravideo)/Sector Alpha (1983) (Spectravideo) [a1].col	8a46e5fa	24576	skip	0	553	8	true	9825	95d0
+231	ALIVE	commercial	alt	Sector Alpha	ColecoVision/Sector Alpha (1983) (Spectravideo)/Sector Alpha (1983) (Spectravideo) [a2].col	ba14a83a	32768	skip	0	553	8	true	9825	95d0
+232	ALIVE	commercial	good	Sector Alpha	ColecoVision/Sector Alpha (1983) (Spectravideo)/Sector Alpha (1983) (Spectravideo).col	fe5f4602	32768	skip	0	553	10	true	9825	95d0
+233	ALIVE	commercial	good	Sewer Sam	ColecoVision/Sewer Sam (1984) (Interphase).col	74057241	24576	skip	12	0	10	true	3594	1d16
+234	ALIVE	commercial	good	Sir Lancelot	ColecoVision/Sir Lancelot (1983) (Xonox) [!].col	dd76775d	16384	skip	13	1487	9	true	8191	9103
+235	ALIVE	commercial	good	Skiing	ColecoVision/Skiing (1986) (Telegames).col	b37d48bd	8192	skip	2	1479	2	false	3695	80f4
+236	ALIVE	commercial	good	Slither	ColecoVision/Slither (1983) (Century II)/Slither (1983) (Century II) [o1].col	5cdb00d3	24576	title	26	1443	9	true	10248	0050
+237	ALIVE	commercial	good	Slither	ColecoVision/Slither (1983) (Century II)/Slither (1983) (Century II).col	53d2651c	16384	title	26	1443	9	true	10248	0050
+238	ALIVE	commercial	bad	Slurpy	ColecoVision/Slurpy (1984) (Xonox)/Slurpy (1984) (Xonox) [b1].col	8871e9fd	16384	skip	15	1468	7	true	8191	8a2a
+239	ALIVE	commercial	good	Slurpy	ColecoVision/Slurpy (1984) (Xonox)/Slurpy (1984) (Xonox).col	27f5c0ad	24576	skip	15	1468	7	true	8191	8a2a
+240	ALIVE	commercial	good	Smurf - Paint 'n Play Workshop	ColecoVision/Smurf - Paint 'n Play Workshop (1983).col	97c0382d	24576	title	13	1481	14	true	7225	10de
+241	ALIVE	commercial	bad	Smurf - Rescue in Gargamel's Castle	ColecoVision/Smurf - Rescue in Gargamel's Castle (1982)/Smurf - Rescue in Gargamel's Castle (1982) [b1].col	d1a1fe0b	16384	title	26	0	11	false	9783	1d59
+242	ALIVE	commercial	good	Smurf - Rescue in Gargamel's Castle	ColecoVision/Smurf - Rescue in Gargamel's Castle (1982)/Smurf - Rescue in Gargamel's Castle (1982).col	42850379	16384	title	26	0	11	false	9783	1d59
+243	BLANK	commercial	bad	Space Fury	ColecoVision/Space Fury (1983) (Sega)/Space Fury (1983) (Sega) [b1].col	567be2b0	16384	title	13	1	1	false	0	0038
+244	ALIVE	commercial	good	Space Fury	ColecoVision/Space Fury (1983) (Sega)/Space Fury (1983) (Sega).col	df8de30f	16384	title	13	673	9	true	15504	1d02
+245	ALIVE	commercial	good	Space Panic	ColecoVision/Space Panic (1983) (Universal).col	5bdf2997	16384	title	13	715	9	false	12315	1d14
+246	ALIVE	commercial	good	Spectron	ColecoVision/Spectron (1983) (Spectravideo).col	3564e134	16384	skip	0	704	14	true	6695	9362
+247	ALIVE	commercial	bad	Spy Hunter	ColecoVision/Spy Hunter (1983-84) (Midway)/Spy Hunter (1983-84) (Midway) [b1].col	0b8db61e	32768	title	13	1458	7	true	13378	e887
+248	ALIVE	commercial	good	Spy Hunter	ColecoVision/Spy Hunter (1983-84) (Midway)/Spy Hunter (1983-84) (Midway).col	36478923	32768	title	13	1458	7	true	13378	e887
+249	ALIVE	commercial	good	Squish 'Em Sam!	ColecoVision/Squish 'Em Sam! (1983) (Interphase).col	6c82e0cc	16384	skip	11	547	10	true	0	0178
+250	ALIVE	commercial	good	Star Trek - Strategic Operations Simulator	ColecoVision/Star Trek - Strategic Operations Simulator (1984) (Sega)/Star Trek - Strategic Operations Simulator (1984) (Sega).col	aff42aa9	32768	title	37	147	8	false	9783	8a7f
+251	ALIVE	commercial	bad	Star Trek - Strategic Operations Simulator	ColecoVision/Star Trek - Strategic Operations Simulator (1984) (Sega)/Star Trek - Strategic Operations Simulator (1984) (Sega)[b1].col	b8ea7b19	24574	title	37	147	8	false	9783	8a7f
+252	ALIVE	commercial	good	Star Wars - The Arcade Game	ColecoVision/Star Wars - The Arcade Game (1984) (Parker Bros).col	0e75b3bf	16384	skip	35	1444	6	false	8191	1d59
+253	ALIVE	commercial	good	Steamroller	ColecoVision/Steamroller (1984) (Activision) (Prototype).col	153ac4ef	16384	skip	0	1464	13	false	1850	808c
+254	ALIVE	commercial	good	Strike It!	ColecoVision/Strike It! (1983) (Telegames)/Strike It! (1983) (Telegames) [!].col	1d9082fb	10240	title	27	1464	6	true	10248	9417
+255	ALIVE	commercial	bad	Strike It!	ColecoVision/Strike It! (1983) (Telegames)/Strike It! (1983) (Telegames) [b1].col	d247a1c8	16384	title	27	1464	6	true	10248	9417
+256	ALIVE	commercial	alt	Subroc	ColecoVision/Subroc (1983) (Sega)/Subroc (1983) (Sega) [a1].col	2ecc2c3b	32768	title	13	339	7	true	14390	ab2b
+257	ALIVE	commercial	good	Subroc	ColecoVision/Subroc (1983) (Sega)/Subroc (1983) (Sega).col	509267f8	24576	title	13	339	7	true	14390	ab25
+258	ALIVE	commercial	alt	Super Action Baseball	ColecoVision/Super Action Baseball (1983) (Coleco)/Super Action Baseball (1983) (Coleco) [a1].col	e1b8eb25	21504	title	27	0	11	true	20725	1baa
+259	ALIVE	commercial	good	Super Action Baseball	ColecoVision/Super Action Baseball (1983) (Coleco)/Super Action Baseball (1983) (Coleco).col	97217677	24576	title	27	0	11	true	20725	1baa
+260	STATIC	commercial	good	Super Action Controller Test Cartridge	ColecoVision/Super Action Controller Test Cartridge (1983) (Nuvatec).col	eb6cb4d8	16384	title	34	3	14	false	0	81a6
+261	ALIVE	commercial	alt	Super Action Football	ColecoVision/Super Action Football (1984) (Coleco)/Super Action Football (1984) (Coleco) [a1].col	b00efd22	32768	title	13	1396	7	false	24573	1289
+262	ALIVE	commercial	good	Super Action Football	ColecoVision/Super Action Football (1984) (Coleco)/Super Action Football (1984) (Coleco).col	62619dc0	32768	title	25	1454	11	true	20725	80c8
+263	ALIVE	commercial	good	Super Action Soccer	ColecoVision/Super Action Soccer (1984) (Coleco).col	acac69dd	32768	title	13	1396	7	false	24573	1289
+264	ALIVE	commercial	alt	Super Cobra	ColecoVision/Super Cobra (1983) (Parker Bros)/Super Cobra (1983) (Parker Bros) [a1].col	f84622d2	8192	skip	13	1481	7	true	8191	9a21
+265	ALIVE	commercial	good	Super Cobra	ColecoVision/Super Cobra (1983) (Parker Bros)/Super Cobra (1983) (Parker Bros).col	6cb5cb8f	8192	skip	13	1481	7	true	8191	9a21
+266	ALIVE	commercial	alt	Super Cross Force	ColecoVision/Super Cross Force (1983) (Spectravideo)/Super Cross Force (1983) (Spectravideo) [a1].col	6c4ed807	16384	skip	0	727	11	true	16382	8f26
+267	ALIVE	commercial	good	Super Cross Force	ColecoVision/Super Cross Force (1983) (Spectravideo)/Super Cross Force (1983) (Spectravideo).col	8093b672	16384	skip	0	727	11	true	16382	8f26
+268	ALIVE	commercial	good	Super DK!	ColecoVision/Super DK! (1983) (Prototype).col	ef25af90	32768	title	13	740	7	false	14716	be91
+269	ALIVE	commercial	good	Super DK! Junior	ColecoVision/Super DK! Junior (1983) (Prototype).col	c2e7f0e0	32768	title	25	1441	12	true	2057	a07d
+270	ALIVE	commercial	good	Tank Wars	ColecoVision/Tank Wars (1983) (Bit Corp) [!].col	7f0baa89	12288	title	17	1463	9	true	8191	8bf2
+271	ALIVE	commercial	bad	Tapper	ColecoVision/Tapper (1984) (Midway)/Tapper (1984) (Midway) [b1].col	6eab5d44	32768	title	13	0	10	true	8859	81fb
+272	ALIVE	commercial	good	Tapper	ColecoVision/Tapper (1984) (Midway)/Tapper (1984) (Midway).col	8afd7db2	32768	title	13	0	10	true	8859	81fb
+273	ALIVE	commercial	good	Tarzan	ColecoVision/Tarzan (1984) (Coleco).col	eff35a70	24576	title	13	1108	10	true	14372	baf5
+274	STATIC	commercial	good	Telly Turtle	ColecoVision/Telly Turtle (1984) (Carousel).col	c8bc1950	16384	title	20	0	10	false	0	1f79
+275	ALIVE	commercial	good	Threshold	ColecoVision/Threshold (1983) (Sierravision).col	1593f7df	16384	skip	15	1402	8	false	8191	83a9
+276	ALIVE	commercial	good	Time Pilot	ColecoVision/Time Pilot (1983) (Konami).col	b3a1eacb	16384	title	25	1405	7	true	12534	1d0b
+277	ALIVE	commercial	bad	Tomarc the Barbarian	ColecoVision/Tomarc the Barbarian (1984) (Xonox)/Tomarc the Barbarian (1984) (Xonox) [b1].col	3fa0cdcb	16384	skip	691	787	9	true	1298	83aa
+278	ALIVE	commercial	good	Tomarc the Barbarian	ColecoVision/Tomarc the Barbarian (1984) (Xonox)/Tomarc the Barbarian (1984) (Xonox).col	1e14397e	16384	skip	691	787	9	true	1298	83aa
+279	ALIVE	commercial	good	Tournament Tennis	ColecoVision/Tournament Tennis (1984) (Imagic) [!].col	c1d5a702	16384	title	13	740	9	false	14697	b117
+280	STATIC	commercial	good	Tunnels & Trolls Demo	ColecoVision/Tunnels & Trolls Demo (1983) (Adam).col	4defcdfa	21504	skip	15	1478	5	false	0	8cad
+281	ALIVE	commercial	good	Turbo	ColecoVision/Turbo (1982) (Sega).col	6ca80b63	16384	title	14	1463	9	true	9222	032f
+282	ALIVE	commercial	good	Tutankham	ColecoVision/Tutankham (1983) (Parker Bros)/Tutankham (1983) (Parker Bros) [o1].col	10cc33a3	16384	skip	13	1470	11	true	4114	a12d
+283	ALIVE	commercial	good	Tutankham	ColecoVision/Tutankham (1983) (Parker Bros)/Tutankham (1983) (Parker Bros).col	0408f58c	12288	skip	13	1470	11	true	4114	a12d
+284	ALIVE	commercial	good	Up 'N Down	ColecoVision/Up 'N Down (1984) (Sega).col	fdd52ca0	16384	skip	12	1195	10	true	11674	90ec
+285	ALIVE	commercial	good	Vampire	ColecoVision/Venture (1982) (Exidy)/Vampire (Venture Hack).col	3da70b52	16384	title	25	1463	5	true	16382	b5ec
+286	ALIVE	commercial	good	Venture	ColecoVision/Venture (1982) (Exidy)/Venture (1982) (Exidy).col	8e5a4aa3	16384	title	25	1463	5	true	16382	b5ec
+287	ALIVE	commercial	bad	Venture	ColecoVision/Venture (1982) (Exidy)/Venture (1982) [b1].col	1d7eb7d1	16384	title	25	1463	5	true	16382	b5ec
+288	ALIVE	commercial	good	Victory	ColecoVision/Victory (1983).col	5f20bf49	24576	title	25	1465	8	true	13378	1d16
+289	ALIVE	commercial	good	Video Hustler	ColecoVision/Video Hustler (1984) (Konami) (Prototype).col	a9177b20	8192	title	25	728	11	true	15504	8113
+290	ALIVE	commercial	good	War Games	ColecoVision/War Games (1983-84).col	6e0150c1	24576	title	16	1472	9	true	12857	c55d
+291	ALIVE	commercial	alt	War Room	ColecoVision/War Room (1983) (Probe 2000)/War Room (1983) (Probe 2000) [a1].col	261b7d56	24576	skip	13	1480	9	true	16382	8f16
+292	ALIVE	commercial	good	War Room	ColecoVision/War Room (1983) (Probe 2000)/War Room (1983) (Probe 2000).col	308a949b	32768	skip	13	1480	9	true	16382	8f16
+293	ALIVE	commercial	good	Wing War	ColecoVision/Wing War (1983) (Imagic).col	04eeef44	16384	title	17	1480	8	true	3088	1d0f
+294	ALIVE	commercial	good	Wizard of Id's Wizmath	ColecoVision/Wizard of Id's Wizmath (1984) (Sierravision).col	b9ba2bb6	16384	skip	3	1500	3	false	6506	8085
+295	ALIVE	commercial	good	Word Feud	ColecoVision/Word Feud (1984) (Xonox).col	9f49bed8	16384	skip	694	806	5	false	326	8f26
+296	STATIC	commercial	good	Yolk's on You, The	ColecoVision/Yolk's on You, The (1983) (20th Century Fox) (Prototype).col	997ad8de	16384	skip	12	1061	8	false	0	89d6
+297	ALIVE	commercial	bad	Zaxxon	ColecoVision/Zaxxon (1982) (Sega)/Zaxxon (1982) (Sega) [b1].col	1f947468	24576	title	26	516	1	true	17413	c060
+298	ALIVE	commercial	good	Zaxxon	ColecoVision/Zaxxon (1982) (Sega)/Zaxxon (1982) (Sega).col	8cb0891a	24576	title	26	516	1	true	17413	c060
+299	ALIVE	commercial	good	Zenji	ColecoVision/Zenji (1984) (Activision).col	6e523e50	16384	skip	0	1476	6	true	0	ac27

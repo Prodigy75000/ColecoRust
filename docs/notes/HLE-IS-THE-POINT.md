@@ -90,6 +90,20 @@ those two facts pull in opposite directions. This one is a user-experience
 decision as much as a technical one, so it is worth putting to the owner rather
 than settling privately.
 
+> **DECIDED 2026-09-27 by the owner: SKIPPED.** In his words, the emulation
+> community prides itself on boot skip, it is the best user experience, and
+> losing the legitimate boot is far outweighed by not making users source BIOS
+> files. The HLE hands over to the cartridge at once, with no title screen.
+>
+> Evidence gathered the same day, before any HLE code: the corpus ships the real
+> BIOS with a `[h1] (no title delay)` hack, which differs in exactly three bytes
+> (`$13F1`-`$13F3`, a `CALL $1968` into the delay loop, NOPped out). The smoke
+> run on it, `ledger/smoke-real-bios-nodelay.tsv`, against the normal BIOS: no
+> title lost a verdict, one gained (Tournament Tennis, STATIC to ALIVE), and
+> hand-over moved from about frame 669 to frames 13-26. Limit: the script's
+> presses were timed for the delay, so this cannot see a game that misbehaves
+> when pressed in its first seconds.
+
 **What "correct" is measured against for the VDP and PSG.** Test ROMs exist for
 the TMS9918A family. Finding out which ones, and whether they print their own
 verdicts the way the suites RustStation uses do, shapes the whole harness list.
