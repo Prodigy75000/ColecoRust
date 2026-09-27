@@ -28,9 +28,7 @@
 //! `$70xx` is saved to the work buffer but restored from `$70xx`. Games were
 //! written against all of it.
 
-use super::routines::{
-    bit_flags, cp_flags, get_vram, mode2, put_vram, ram16, read_vram, set_ram16, write_vram,
-};
+use super::routines::{bit_flags, cp_flags, get_vram, mode2, put_vram, ram16, read_vram, set_ram16, sz53p, write_vram};
 use crate::machine::ColecoBus;
 use crate::z80::{Bus, Z80};
 
@@ -182,12 +180,19 @@ fn activate_one(
     bus.write(status, 0);
     let kind = peek(bus, gfx);
     let byte = |bus: &mut ColecoBus, i: u16| peek(bus, gfx.wrapping_add(i));
+    // The registers each path leaves, since a game may read them: BC starts
+    // as the status pointer, and marking an old screen in VRAM leaves the
+    // BC and HL of the one-byte WRITE_VRAM that does it.
     match kind & 0x0f {
         0 => {
-            let mut c = mark_old_screen(bus, desc);
+            let (mut c, vram) = mark_old_screen(bus, desc);
             let first = byte(bus, 1);
             let count = byte(bus, 2);
             bus.write(status.wrapping_add(5), first.wrapping_add(count));
+            cpu.iy = status;
+            cpu.set_bc(if vram { 0x00be } else { status });
+            cpu.set_de(gfx.wrapping_add(2));
+            cpu.set_hl(first as u16);
             if load {
                 let patterns = ram16(bus, gfx.wrapping_add(3));
                 c += load_patterns(cpu, bus, kind, first, count, patterns);
@@ -195,10 +200,14 @@ fn activate_one(
             c
         }
         1 => {
-            let c = mark_old_screen(bus, desc);
+            let (c, vram) = mark_old_screen(bus, desc);
             let (a, b) = (byte(bus, 2), byte(bus, 3));
             bus.write(status.wrapping_add(5), a);
             bus.write(status.wrapping_add(6), b);
+            cpu.iy = status;
+            cpu.set_bc(if vram { 0x00be } else { status });
+            cpu.set_de(gfx.wrapping_add(3));
+            cpu.set_hl(if vram { 0x0588 } else { desc.wrapping_add(5) });
             c
         }
         2 | 3 => {
@@ -206,6 +215,10 @@ fn activate_one(
             let patterns = ram16(bus, gfx.wrapping_add(2));
             let count = byte(bus, 4);
             bus.write(status.wrapping_add(5), first.wrapping_add(count));
+            cpu.set_bc(count as u16);
+            cpu.iy = count as u16;
+            cpu.set_hl(patterns);
+            cpu.set_de(first as u16);
             if load {
                 table_call(cpu, bus, put_vram, 1, first as u16, patterns, count as u16)
             } else {
@@ -219,29 +232,41 @@ fn activate_one(
                 let part = ram16(bus, desc.wrapping_add(4 + 2 * i));
                 c += activate_at(cpu, bus, part, load, budget) + 80;
             }
+            // The loop reads one pointer past the last part; C is still the
+            // status pointer's low byte.
+            let next = desc.wrapping_add(4 + 2 * parts as u16);
+            cpu.set_bc(status & 0x00ff);
+            cpu.set_de(ram16(bus, next));
+            cpu.set_hl(next.wrapping_add(2));
             c
         }
-        _ => 0,
+        _ => {
+            cpu.set_bc(status);
+            cpu.set_de(gfx);
+            cpu.set_hl(desc.wrapping_add(4));
+            0
+        }
     }
 }
 
 /// Mark a background object's old screen empty: `$80` in its first byte,
-/// in RAM or VRAM as the pointer says. No old screen, no mark.
-fn mark_old_screen(bus: &mut ColecoBus, desc: u16) -> i32 {
+/// in RAM or VRAM as the pointer says. No old screen, no mark. Also says
+/// whether it was VRAM, which changes the registers left behind.
+fn mark_old_screen(bus: &mut ColecoBus, desc: u16) -> (i32, bool) {
     let old = ram16(bus, desc.wrapping_add(4));
     let hi = (old >> 8) as u8;
     if hi & 0x80 != 0 {
-        return 0;
+        return (0, false);
     }
     if hi >= RAM_PAGE {
         bus.write(old, 0x80);
-        return 30;
+        return (30, false);
     }
     let ctl = old.wrapping_add(0x4000);
     bus.vdp.write_control(ctl as u8);
     bus.vdp.write_control((ctl >> 8) as u8);
     bus.vdp.write_data(0x80);
-    100
+    (100, true)
 }
 
 /// A background object's patterns and colours into VRAM. In graphics mode 2
@@ -272,6 +297,12 @@ fn load_patterns(
             }
             name = name.wrapping_add(0x100);
         }
+        // Each third's load saves and restores every register but IX, and
+        // the name steps by `$100` after the first two thirds only.
+        cpu.set_bc(bytes);
+        cpu.iy = count as u16;
+        cpu.set_de((first as u16).wrapping_add(0x200));
+        cpu.set_hl(patterns);
         return c;
     }
     c += table_call(cpu, bus, put_vram, 3, first as u16, patterns, count as u16);
@@ -378,6 +409,7 @@ fn draw_one(
 ) -> Option<i32> {
     let gfx = ram16(bus, desc);
     let kind = peek(bus, gfx);
+    cpu.ix = desc;
     match kind & 0x0f {
         0 => Some(semi_mobile(cpu, bus, desc, gfx)),
         1 => Some(mobile(cpu, bus, desc, gfx, param)),
@@ -419,6 +451,7 @@ fn semi_mobile(cpu: &mut Z80, bus: &mut ColecoBus, desc: u16, gfx: u16) -> i32 {
     let old = ram16(bus, desc.wrapping_add(4));
     let old_hi = (old >> 8) as u8;
     if old_hi & 0x80 != 0 {
+        // Straight out of the drawing, IX as its PUT_VRAMs left it.
         return draw_cells(cpu, bus, names, row, col, w, h) + 300;
     }
     let mut c = 300;
@@ -462,6 +495,9 @@ fn semi_mobile(cpu: &mut Z80, bus: &mut ColecoBus, desc: u16, gfx: u16) -> i32 {
     }
     c += save_cells(cpu, bus, keep.wrapping_add(4), row, col, w, h);
     c += draw_cells(cpu, bus, names, row, col, w, h);
+    // The drawing is wrapped in PUSH IX / POP IX here, then the old screen's
+    // page is tested: RAM ends there, VRAM writes the buffer back.
+    cpu.ix = desc;
     if old_hi < RAM_PAGE {
         let buffer = ram16(bus, WORK_BUFFER);
         let (sw, sh) = (
@@ -470,6 +506,10 @@ fn semi_mobile(cpu: &mut Z80, bus: &mut ColecoBus, desc: u16, gfx: u16) -> i32 {
         );
         let n = doubled(sw as u16, sh);
         c += block_call(cpu, bus, write_vram, buffer, old, n);
+    } else {
+        cpu.set_a(RAM_PAGE);
+        cpu.f = cp_flags(RAM_PAGE, old_hi);
+        cpu.set_de(u16::from_be_bytes([old_hi, cpu.de() as u8]));
     }
     c
 }
@@ -733,15 +773,30 @@ fn cell_offset(row: u8, col: u8) -> u16 {
 }
 
 /// Draw a `w` by `h` block of names from `src` with its top left at a signed
-/// cell position, clipped to the 32 by 24 screen.
+/// cell position, clipped to the 32 by 24 screen. Leaves the registers the
+/// real one does: B, C the size, D the row, HL the names, and, once drawn,
+/// A = E = the height and IY the clipped width.
 fn draw_cells(cpu: &mut Z80, bus: &mut ColecoBus, src: u16, row: u8, col: u8, w: u8, h: u8) -> i32 {
+    let names = src;
     let mut offset = cell_offset(row, col);
     let mut src = src;
+    cpu.set_bc(u16::from_be_bytes([h, w]));
+    cpu.set_de(u16::from_be_bytes([row, col]));
+    cpu.set_hl(names);
     if col & 0x80 == 0 && col >= 0x20 {
+        cpu.set_a(col);
+        cpu.f = cp_flags(col, 0x20);
         return 40;
     }
     let end = col.wrapping_add(w);
-    if end & 0x80 != 0 || end == 0 {
+    if end & 0x80 != 0 {
+        cpu.set_a(end);
+        cpu.f = bit_flags(u8::from(col as u16 + w as u16 > 0xff), 7, end);
+        return 50;
+    }
+    if end == 0 {
+        cpu.set_a(0);
+        cpu.f = sz53p(0);
         return 50;
     }
     let count = if col & 0x80 != 0 {
@@ -766,6 +821,12 @@ fn draw_cells(cpu: &mut Z80, bus: &mut ColecoBus, src: u16, row: u8, col: u8, w:
         r = r.wrapping_add(1);
         c += 60;
         if r == h {
+            cpu.set_a(h);
+            cpu.f = cp_flags(h, h);
+            cpu.set_bc(u16::from_be_bytes([h, w]));
+            cpu.set_de(u16::from_be_bytes([row, h]));
+            cpu.set_hl(names);
+            cpu.iy = count as u16;
             return c;
         }
     }
@@ -880,6 +941,11 @@ fn complex(
         c += putobj_at(cpu, bus, part, param, budget)? + 150;
         n = n.wrapping_sub(1);
         if n == 0 {
+            // It ends on DEC D to zero, with the part list's pointer in IY
+            // and E still the parameter; carry is the last part's.
+            cpu.set_de(param as u16);
+            cpu.iy = list;
+            cpu.f = 0x42 | (cpu.f & 0x01);
             return Some(c);
         }
     }

@@ -4,8 +4,13 @@
 //! `routinediff`: one HLE routine against the real one, on real calls.
 //!
 //!   routinediff --bios bios/coleco.rom --routine 1FD9 [--show KIND] dumps/corpus
+//!   routinediff --bios bios/coleco.rom --routine all --title Frenzy dumps/corpus
 //!
 //! `--show RAM` (or any difference kind) lists only examples with that kind.
+//! `--routine all` compares every routine in the jump table at once, one
+//! tally each. `--title TEXT` keeps only titles whose name contains TEXT and
+//! then compares every call, not a sample: the way to find which routine a
+//! title that fails on the HLE, but calls nothing unwritten, is tripping on.
 //!
 //! Every title (one dump each) runs on the REAL BIOS under the smoke script.
 //! Whenever cartridge code reaches the routine (its jump-table slot, or the
@@ -39,6 +44,8 @@ mod corpus;
 const FIRST_SAMPLES: u32 = 12;
 const EVERY: u32 = 97;
 const MAX_SAMPLES: u32 = 40;
+/// With `--title`, every call, up to this many per routine.
+const ALL_SAMPLES: u32 = 5000;
 /// A call that has not returned in this many cycles is abandoned (a routine
 /// entered by JP, or one that never returns).
 const TIMEOUT: u64 = 4_000_000;
@@ -150,19 +157,37 @@ fn object_type(m: &Coleco, target: u16) -> Option<u8> {
     Some(m.bus.peek(word(descriptor)) & 0x0f)
 }
 
-fn run_title(bios: &[u8], cart: &[u8], title: &str, slot: u16, target: u16, show: &str, t: &mut Tally) {
+/// Compare the calls one title makes to any of `routines` (slot, routine
+/// pairs), into one tally per routine.
+fn run_title(
+    bios: &[u8],
+    cart: &[u8],
+    title: &str,
+    routines: &[(u16, u16)],
+    show: &str,
+    every_call: bool,
+    tallies: &mut BTreeMap<u16, Tally>,
+) {
     let Ok(mut m) = Coleco::new(Coleco::bios_from_bytes(bios).unwrap(), cart) else { return };
     let Ok(mut h) = Coleco::new(Firmware::Hle, cart) else { return };
-    let mut seen = 0u32;
+    let mut seen: BTreeMap<u16, u32> = BTreeMap::new();
     let mut frame = 0u32;
     let mut was_bios = false;
     while frame < corpus::FRAMES {
         m.bus.pads = corpus::pads_at(frame);
         let pc = m.cpu.pc;
         // Entered from outside the BIOS, at the slot or the routine itself.
-        if (pc == slot || pc == target) && !was_bios {
-            seen += 1;
-            let take = seen <= FIRST_SAMPLES || (seen % EVERY == 0 && seen / EVERY < MAX_SAMPLES);
+        let called = if was_bios { None } else { routines.iter().find(|&&(s, t)| pc == s || pc == t) };
+        if let Some(&(_, target)) = called {
+            let seen = seen.entry(target).or_default();
+            *seen += 1;
+            let seen = *seen;
+            let t = tallies.entry(target).or_default();
+            let take = if every_call {
+                seen <= ALL_SAMPLES
+            } else {
+                seen <= FIRST_SAMPLES || (seen % EVERY == 0 && seen / EVERY < MAX_SAMPLES)
+            };
             if take {
                 let before = m.save_state();
                 let entry = format!(
@@ -219,7 +244,7 @@ fn run_title(bios: &[u8], cart: &[u8], title: &str, slot: u16, target: u16, show
                                 Some(c) => format!("type {c} {entry}"),
                                 None => entry.clone(),
                             };
-                            t.examples.push(format!("{title} {entry}: {}", d.join("; ")));
+                            t.examples.push(format!("{title} frame {frame} {entry}: {}", d.join("; ")));
                         }
                     }
                 }
@@ -236,30 +261,35 @@ fn run_title(bios: &[u8], cart: &[u8], title: &str, slot: u16, target: u16, show
 
 fn main() {
     let mut bios_path: Option<String> = None;
-    let mut routine: Option<u16> = None;
+    let mut routine: Option<String> = None;
     let mut show = String::new();
+    let mut only_title: Option<String> = None;
     let mut dir: Option<String> = None;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--bios" => bios_path = args.next(),
-            "--routine" => routine = args.next().and_then(|v| u16::from_str_radix(&v, 16).ok()),
+            "--routine" => routine = args.next(),
             "--show" => show = args.next().unwrap_or_default(),
+            "--title" => only_title = args.next(),
             _ => dir = Some(a),
         }
     }
     let (Some(bios_path), Some(routine), Some(dir)) = (bios_path, routine, dir) else {
-        eprintln!("usage: routinediff --bios PATH --routine SLOT_HEX CARTDIR");
+        eprintln!("usage: routinediff --bios PATH --routine SLOT_HEX|all [--title TEXT] [--show KIND] CARTDIR");
         std::process::exit(2);
     };
-    let (slot, target) = TABLE
-        .iter()
-        .copied()
-        .find(|&(s, t)| s == routine || t == routine)
-        .unwrap_or_else(|| {
-            eprintln!("{routine:04X} is not a jump-table slot or routine");
+    let routines: Vec<(u16, u16)> = if routine == "all" {
+        TABLE.to_vec()
+    } else {
+        let wanted = u16::from_str_radix(&routine, 16).unwrap_or(0);
+        let pair = TABLE.iter().copied().find(|&(s, t)| s == wanted || t == wanted).unwrap_or_else(|| {
+            eprintln!("{routine} is not a jump-table slot or routine");
             std::process::exit(2)
         });
+        vec![pair]
+    };
+    let routines = Arc::new(routines);
     // The real BIOS runs with OUR font patched in, so a routine that moves the
     // font (LOAD_ASCII, or a game copying glyphs) compares equal when it moves
     // it correctly, instead of differing by design on every glyph.
@@ -268,40 +298,51 @@ fn main() {
     bios[0x158b..=0x18a2].copy_from_slice(&ours[0x158b..=0x18a2]);
     let bios = Arc::new(bios);
     let root = PathBuf::from(&dir);
-    let paths = corpus::representatives(&corpus::cartridges(&root), &root);
+    let mut paths = corpus::representatives(&corpus::cartridges(&root), &root);
+    if let Some(want) = &only_title {
+        paths.retain(|p| {
+            let file = p.strip_prefix(&root).unwrap_or(p).to_string_lossy().replace('\\', "/");
+            corpus::classify(&file).2.contains(want.as_str())
+        });
+    }
+    let every_call = only_title.is_some();
 
     let jobs = Arc::new(Mutex::new(paths));
-    let tally = Arc::new(Mutex::new(Tally::default()));
+    let tally: Arc<Mutex<BTreeMap<u16, Tally>>> = Arc::new(Mutex::new(BTreeMap::new()));
     let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(16);
     let handles: Vec<_> = (0..threads)
         .map(|_| {
             let (jobs, tally, bios, root, show) = (jobs.clone(), tally.clone(), bios.clone(), root.clone(), show.clone());
+            let routines = routines.clone();
             std::thread::spawn(move || loop {
                 let Some(p) = jobs.lock().unwrap().pop() else { break };
                 let file = p.strip_prefix(&root).unwrap_or(&p).to_string_lossy().replace('\\', "/");
                 let (_, _, title) = corpus::classify(&file);
                 let cart = std::fs::read(&p).unwrap_or_default();
-                let mut t = Tally::default();
-                run_title(&bios, &cart, &title, slot, target, &show, &mut t);
-                let mut all = tally.lock().unwrap();
-                all.samples += t.samples;
-                all.exact += t.exact;
-                all.clean += t.clean;
-                all.nmi_skipped += t.nmi_skipped;
-                all.timeouts += t.timeouts;
-                all.real_cycles += t.real_cycles;
-                for (k, v) in t.kinds {
-                    *all.kinds.entry(k).or_default() += v;
-                }
-                for (c, (n, clean, titles)) in t.classes {
-                    let e = all.classes.entry(c).or_default();
-                    e.0 += n;
-                    e.1 += clean;
-                    e.2.extend(titles);
-                }
-                for e in t.examples {
-                    if all.examples.len() < 12 {
-                        all.examples.push(e);
+                let mut ts = BTreeMap::new();
+                run_title(&bios, &cart, &title, &routines, &show, every_call, &mut ts);
+                let mut tallies = tally.lock().unwrap();
+                for (target, t) in ts {
+                    let all = tallies.entry(target).or_default();
+                    all.samples += t.samples;
+                    all.exact += t.exact;
+                    all.clean += t.clean;
+                    all.nmi_skipped += t.nmi_skipped;
+                    all.timeouts += t.timeouts;
+                    all.real_cycles += t.real_cycles;
+                    for (k, v) in t.kinds {
+                        *all.kinds.entry(k).or_default() += v;
+                    }
+                    for (c, (n, clean, titles)) in t.classes {
+                        let e = all.classes.entry(c).or_default();
+                        e.0 += n;
+                        e.1 += clean;
+                        e.2.extend(titles);
+                    }
+                    for e in t.examples {
+                        if all.examples.len() < 12 {
+                            all.examples.push(e);
+                        }
                     }
                 }
             })
@@ -310,32 +351,35 @@ fn main() {
     for h in handles {
         h.join().expect("worker panicked");
     }
-    let t = tally.lock().unwrap();
-    println!("routine {slot:04X} -> {target:04X}");
-    println!(
-        "  {} samples, {} exact ({:.1}%), {} set aside for an NMI, {} timed out",
-        t.samples,
-        t.exact,
-        if t.samples == 0 { 0.0 } else { t.exact as f64 * 100.0 / t.samples as f64 },
-        t.nmi_skipped,
-        t.timeouts
-    );
-    println!(
-        "  {} clean ({:.1}%): exact but for stack left-overs and timing-set VDP status",
-        t.clean,
-        if t.samples == 0 { 0.0 } else { t.clean as f64 * 100.0 / t.samples as f64 }
-    );
-    if t.samples > 0 {
-        println!("  real routine: {} cycles per call on average", t.real_cycles / t.samples);
-    }
-    for (k, v) in &t.kinds {
-        println!("  differs in {k:<6} {v}");
-    }
-    for (c, (n, clean, titles)) in &t.classes {
-        let names: Vec<&str> = titles.iter().map(String::as_str).collect();
-        println!("  object type {c}: {clean}/{n} clean, {} titles: {}", titles.len(), names.join("; "));
-    }
-    for e in &t.examples {
-        println!("  e.g. {e}");
+    let tallies = tally.lock().unwrap();
+    for &(slot, target) in routines.iter() {
+        let Some(t) = tallies.get(&target) else { continue };
+        println!("routine {slot:04X} -> {target:04X}");
+        println!(
+            "  {} samples, {} exact ({:.1}%), {} set aside for an NMI, {} timed out",
+            t.samples,
+            t.exact,
+            if t.samples == 0 { 0.0 } else { t.exact as f64 * 100.0 / t.samples as f64 },
+            t.nmi_skipped,
+            t.timeouts
+        );
+        println!(
+            "  {} clean ({:.1}%): exact but for stack left-overs and timing-set VDP status",
+            t.clean,
+            if t.samples == 0 { 0.0 } else { t.clean as f64 * 100.0 / t.samples as f64 }
+        );
+        if t.samples > 0 {
+            println!("  real routine: {} cycles per call on average", t.real_cycles / t.samples);
+        }
+        for (k, v) in &t.kinds {
+            println!("  differs in {k:<6} {v}");
+        }
+        for (c, (n, clean, titles)) in &t.classes {
+            let names: Vec<&str> = titles.iter().map(String::as_str).collect();
+            println!("  object type {c}: {clean}/{n} clean, {} titles: {}", titles.len(), names.join("; "));
+        }
+        for e in &t.examples {
+            println!("  e.g. {e}");
+        }
     }
 }

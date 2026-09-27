@@ -43,7 +43,7 @@ pub fn cp_flags(a: u8, n: u8) -> u8 {
 }
 
 /// S, Z, the undocumented bits 5 and 3, and parity, of a result.
-fn sz53p(v: u8) -> u8 {
+pub(super) fn sz53p(v: u8) -> u8 {
     let mut f = v & 0xa8;
     if v == 0 {
         f |= 0x40;
@@ -94,7 +94,7 @@ pub(super) fn mode2(bus: &ColecoBus) -> bool {
 /// Run the routine at `target`, if it is written. `None` when it is not
 /// written yet.
 pub fn call(target: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
-    use super::{objects, sound};
+    use super::{objects, sound, timers};
     match target {
         0x025e => return Some(sound::play_it(cpu, bus)),
         0x027f => return Some(sound::sound_man(cpu, bus)),
@@ -126,6 +126,11 @@ pub fn call(target: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
         0x1979 => game_opt(cpu, bus),
         0x04a3 => objects::activate(cpu, bus),
         0x0664 => objects::init_writer(cpu, bus),
+        0x0faa => timers::init_timer(cpu, bus),
+        0x0f37 => timers::time_mgr(cpu, bus),
+        0x1053 => timers::request_signal(cpu, bus),
+        0x10cb => timers::test_signal(cpu, bus),
+        0x0fc4 => timers::free_signal(cpu, bus),
         _ => return None,
     }))
 }

@@ -32,6 +32,7 @@ pub mod font;
 pub mod objects;
 pub mod routines;
 pub mod sound;
+pub mod timers;
 
 use crate::machine::ColecoBus;
 use crate::z80::{Bus, Z80};
