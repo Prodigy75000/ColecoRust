@@ -101,3 +101,4 @@ is the right one here, but it needs a rule or it becomes an opinion:
 | HLE BIOS | not started |
 | Save states | v1 layout, fixed size, round-trip tested |
 | libretro | not started |
+| Corpus smoke, REAL BIOS | 151 of 164 commercial titles and 42 of 48 PD titles ALIVE, 0 crashed; `ledger/smoke-real-bios.tsv`, `cargo run --release -p coleco-runner --bin smoke` |

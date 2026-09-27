@@ -13,6 +13,11 @@ description = "Dev harnesses for ColecoRust: test-ROM runs, headless renders, an
 name = "coleco"
 path = "src/coleco.rs"
 
+# Corpus smoke: every cartridge under a directory, one derived verdict each.
+[[bin]]
+name = "smoke"
+path = "src/smoke.rs"
+
 # Z80 conformance: ZEXDOC then ZEXALL, on a minimal test bus. Lifted from
 # MegaRust with the CPU.
 [[bin]]
