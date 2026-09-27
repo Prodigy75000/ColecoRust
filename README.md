@@ -10,7 +10,7 @@ no third-party emulator code. It does reuse the owner's own in-house cores:
 the Z80 is MegaRust's, and the VDP and PSG are adapted from MegaRust's. Each
 such file says where it came from and at which commit.
 
-Started 2026-09-27. With NO BIOS file, on ColecoRust's own HLE BIOS, 132 of the
+Started 2026-09-27. With NO BIOS file, on ColecoRust's own HLE BIOS, 134 of the
 collection's 164 commercial titles reach gameplay (151 on the real BIOS).
 
 ## The point of this core is the HLE BIOS
