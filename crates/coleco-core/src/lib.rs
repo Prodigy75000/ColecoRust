@@ -41,6 +41,7 @@
 //! real BIOS puts, where the real BIOS puts it, and keep its own state on the
 //! host side.
 
+pub mod census;
 pub mod machine;
 pub mod psg;
 pub mod save;

@@ -29,6 +29,7 @@
 //! gets one at that moment. This is the single wiring fact most likely to be
 //! gotten subtly wrong.
 
+use crate::census::Probe;
 use crate::psg::Audio;
 use crate::save::{LoadError, ReadCursor, SaveState, WriteCursor};
 use crate::vdp::{self, Vdp};
@@ -126,10 +127,13 @@ pub struct ColecoBus {
     pub pads: [Pad; 2],
     /// True after a write to `$80`-`$9F`, false after `$C0`-`$DF`.
     keypad_mode: bool,
+    /// The BIOS census instrument, when a harness attaches one. Not state.
+    pub probe: Option<Box<Probe>>,
 }
 
-impl Bus for ColecoBus {
-    fn read(&mut self, addr: u16) -> u8 {
+impl ColecoBus {
+    /// A read with no side effects and no probe: for instrumentation.
+    pub fn peek(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x1fff => self.bios[addr as usize],
             0x2000..=0x5fff => 0xff,
@@ -137,8 +141,20 @@ impl Bus for ColecoBus {
             _ => *self.cart.get(addr as usize - 0x8000).unwrap_or(&0xff),
         }
     }
+}
+
+impl Bus for ColecoBus {
+    fn read(&mut self, addr: u16) -> u8 {
+        if let Some(p) = &mut self.probe {
+            p.read(addr);
+        }
+        self.peek(addr)
+    }
 
     fn write(&mut self, addr: u16, val: u8) {
+        if let Some(p) = &mut self.probe {
+            p.write(addr);
+        }
         if let 0x6000..=0x7fff = addr {
             self.ram[addr as usize & (WORK_RAM - 1)] = val;
         }
@@ -213,6 +229,7 @@ impl Coleco {
             audio: Audio::new(),
             pads: [Pad::default(); 2],
             keypad_mode: false,
+            probe: None,
         };
         let mut m = Coleco { cpu: Z80::new(), bus, int_line: false, line_cycles: 0, nmis: 0 };
         m.cpu.reset();
@@ -243,7 +260,22 @@ impl Coleco {
         self.bus.vdp.begin_line();
         while self.line_cycles < CYCLES_PER_LINE {
             let mut c = self.poll_nmi();
-            c += self.cpu.step(&mut self.bus);
+            if self.bus.probe.is_some() {
+                let pc = self.cpu.pc;
+                let op = [self.bus.peek(pc), self.bus.peek(pc.wrapping_add(1))];
+                let p = self.bus.probe.as_mut().unwrap();
+                p.cycles(pc, c);
+                p.instruction(pc, op, c > 0);
+                if p.cart_seen && p.handover.is_none() {
+                    p.handover = Some(self.bus.ram.to_vec());
+                }
+            }
+            let pc = self.cpu.pc;
+            let s = self.cpu.step(&mut self.bus);
+            if let Some(p) = &mut self.bus.probe {
+                p.cycles(pc, s);
+            }
+            c += s;
             self.line_cycles += c;
             self.bus.audio.run(c as u32);
         }

@@ -18,6 +18,11 @@ path = "src/coleco.rs"
 name = "smoke"
 path = "src/smoke.rs"
 
+# BIOS census: what each title calls, reads and depends on, on the real BIOS.
+[[bin]]
+name = "census"
+path = "src/census.rs"
+
 # Z80 conformance: ZEXDOC then ZEXALL, on a minimal test bus. Lifted from
 # MegaRust with the CPU.
 [[bin]]

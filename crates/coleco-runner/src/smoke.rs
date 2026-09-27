@@ -27,19 +27,17 @@
 //! tell a working game from a nicely animated wrong one. The PNGs and contact
 //! sheets are there for the eye.
 
-use coleco_core::machine::{Coleco, Pad};
+use coleco_core::machine::Coleco;
+use corpus::{classify, header, FRAMES};
 use coleco_core::vdp::{HEIGHT, WIDTH};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 #[path = "png.rs"]
 mod png;
+#[path = "corpus.rs"]
+mod corpus;
 
-const FRAMES: u32 = 1500;
-const KEY_AT: [u32; 3] = [760, 1000, 1240];
-const FIRE_AT: [u32; 2] = [880, 1120];
-/// Frames a scripted press is held.
-const HOLD: u32 = 10;
 const STILL_WINDOW: u32 = 100;
 /// Thumbnails on a contact sheet, eight across.
 const SHEET: usize = 48;
@@ -60,51 +58,6 @@ struct Row {
     peak: u16,
     pc: u16,
     frame: Vec<u32>,
-}
-
-fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(rd) = std::fs::read_dir(dir) else { return };
-    let mut entries: Vec<_> = rd.flatten().map(|e| e.path()).collect();
-    entries.sort();
-    for p in entries {
-        if p.is_dir() {
-            collect(&p, out);
-        } else if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("col")) {
-            out.push(p);
-        }
-    }
-}
-
-/// Commercial or public domain, the dump's GoodTools-style status, and the
-/// title with every parenthesised and bracketed tag removed, which is what
-/// variants of one game share. The denominator is counted in titles, not
-/// files: the collection's 300 cartridge files are far fewer games.
-fn classify(file: &str) -> (&'static str, &'static str, String) {
-    let class = if file.contains("(PD)") || file.contains("Public Domain/") { "pd" } else { "commercial" };
-    let name = file.rsplit('/').next().unwrap_or(file);
-    let dump = if name.contains("[b") {
-        "bad"
-    } else if name.contains("[h") {
-        "hack"
-    } else if name.contains("[t") {
-        "trainer"
-    } else if name.contains("[a") {
-        "alt"
-    } else {
-        "good"
-    };
-    let stem = name.trim_end_matches(".col");
-    let cut = stem.find(['(', '[']).unwrap_or(stem.len());
-    (class, dump, stem[..cut].trim().to_string())
-}
-
-/// What the first two bytes say the BIOS should do with the cartridge.
-fn header(cart: &[u8]) -> &'static str {
-    match cart.get(0..2) {
-        Some([0xaa, 0x55]) => "title",
-        Some([0x55, 0xaa]) => "skip",
-        _ => "none",
-    }
 }
 
 fn run_one(bios: &[u8], path: &Path, root: &Path) -> Row {
@@ -133,20 +86,13 @@ fn run_one(bios: &[u8], path: &Path, root: &Path) -> Row {
 
     let mut before_still: Vec<u32> = Vec::new();
     for f in 0..FRAMES {
-        let held = |at: &[u32]| at.iter().any(|&a| (a..a + HOLD).contains(&f));
-        let key = held(&KEY_AT).then_some(1);
-        let fire = held(&FIRE_AT);
-        // Keys and fire on BOTH controllers. Destructor and Turbo, the two
-        // Driving Module titles, ignored controller 1's keypad in the first
-        // runs; the wheel has no keypad, so they are expected to read port 2.
-        let pad = Pad { key, fire_left: fire, fire_right: fire, ..Pad::default() };
-        m.bus.pads = [pad, pad];
+        m.bus.pads = corpus::pads_at(f);
         m.run_frame();
         if row.first_cart_frame.is_none() && m.cpu.pc >= 0x8000 {
             row.first_cart_frame = Some(f);
         }
         let audio = m.take_audio();
-        if f >= KEY_AT[0] {
+        if f >= corpus::FIRST_INPUT {
             let p = audio.iter().map(|s| s.unsigned_abs()).max().unwrap_or(0);
             row.peak = row.peak.max(p);
         }
@@ -208,11 +154,7 @@ fn main() {
     let bios = std::fs::read(&bios_path).expect("read bios");
     Coleco::bios_from_bytes(&bios).expect("an 8 KB BIOS");
     let root = PathBuf::from(&dir);
-    let mut paths = Vec::new();
-    collect(&root, &mut paths);
-    // The BIOS and its hacks are in the corpus as .col files; they are not
-    // cartridges.
-    paths.retain(|p| !p.to_string_lossy().contains("ColecoVision BIOS"));
+    let paths = corpus::cartridges(&root);
     std::fs::create_dir_all(&out).expect("create out dir");
 
     let jobs = Arc::new(Mutex::new(paths.clone().into_iter().enumerate().collect::<Vec<_>>()));
