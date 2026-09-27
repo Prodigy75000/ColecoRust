@@ -8,7 +8,8 @@ Copyright (C) 2026 Prodigy75000
 A clean-room ColecoVision emulator core written from scratch in Rust. No C, no
 bindings, no lifted code.
 
-Started 2026-09-27. Nothing works yet.
+Started 2026-09-27. On the REAL BIOS, Donkey Kong boots through the title screen
+to gameplay with sound. The HLE, which is the point, does not exist yet.
 
 ## The point of this core is the HLE BIOS
 
@@ -93,10 +94,10 @@ is the right one here, but it needs a rule or it becomes an opinion:
 | Component | State |
 |-----------|-------|
 | Z80 | lifted from MegaRust (`origin/main` 3e97ca7), ZEXDOC and ZEXALL 79/79 here; `cargo run --release -p coleco-runner --bin zexall` |
-| TMS9918A | not started |
-| SN76489 | not started |
-| Controllers and keypad | not started |
+| TMS9918A | adapted from MegaRust's SG-1000 path to TI's chip (3-bit register select, Graphics II masks, no mode 4) |
+| SN76489 | adapted from MegaRust to TI's SN76489AN (15-bit noise register); 44.1 kHz mono |
+| Controllers and keypad | joystick and keypad modes; keypad key 1 confirmed through the real BIOS, the other eleven codes unverified |
 | Mapper / bank switching | not started |
 | HLE BIOS | not started |
-| Save states | not started |
+| Save states | v1 layout, fixed size, round-trip tested |
 | libretro | not started |

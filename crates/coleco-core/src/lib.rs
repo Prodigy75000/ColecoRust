@@ -41,7 +41,10 @@
 //! real BIOS puts, where the real BIOS puts it, and keep its own state on the
 //! host side.
 
+pub mod machine;
+pub mod psg;
 pub mod save;
+pub mod vdp;
 pub mod z80;
 
 /// Z80A clock, 3.579545 MHz. One third of the NTSC colour burst, which is why
@@ -67,7 +70,10 @@ pub const BIOS_SIZE: usize = 8 * 1024;
 ///
 /// Bump on ANY layout change. A state written by a newer build must be refused
 /// by an older one rather than misread.
-pub const SAVE_STATE_VERSION: u32 = 0;
+///
+/// v1: the first layout (Z80, RAM, VDP, PSG and resampler, controller mode,
+/// the NMI line, the line cycle counter), 2026-09-27.
+pub const SAVE_STATE_VERSION: u32 = 1;
 
 /// How the machine gets its BIOS behaviour.
 ///

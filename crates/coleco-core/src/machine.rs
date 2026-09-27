@@ -1,0 +1,397 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Prodigy75000
+
+//! The ColecoVision: memory map, I/O ports, controllers, and the frame loop.
+//!
+//! **Sources.** None of this is in our own notes yet; it is the published
+//! ColecoVision memory and port map as every emulator and the homebrew
+//! community describe it, written here from that common description and not
+//! from any one document. It needs a derived write-up in `docs/ref/` with
+//! citations, and until then every claim below is checkable against the real
+//! BIOS, which is the point of running it: a wrong port decode shows up as
+//! the BIOS title screen not appearing.
+//!
+//! | Range | What |
+//! |---|---|
+//! | `$0000-$1FFF` | BIOS, 8 KB |
+//! | `$2000-$5FFF` | expansion port, open bus here |
+//! | `$6000-$7FFF` | 1 KB of RAM, mirrored eight times |
+//! | `$8000-$FFFF` | cartridge, up to 32 KB |
+//!
+//! Ports are decoded on address bits 7-5 only, so each function owns 32 ports:
+//! `$80` writes select keypad mode, `$A0` is the VDP (bit 0: data or
+//! control), `$C0` writes select joystick mode, `$E0` writes go to the PSG and
+//! reads return a controller (bit 1: which one).
+//!
+//! The VDP's interrupt output is wired to the Z80's **NMI**, not its INT, and
+//! NMI is edge-triggered. So an interrupt is taken when the VDP line goes
+//! active, once, and a game that enables interrupts while F is already set
+//! gets one at that moment. This is the single wiring fact most likely to be
+//! gotten subtly wrong.
+
+use crate::psg::Audio;
+use crate::save::{LoadError, ReadCursor, SaveState, WriteCursor};
+use crate::vdp::{self, Vdp};
+use crate::z80::{Bus, Z80};
+use crate::{BIOS_SIZE, WORK_RAM};
+
+/// Z80 clocks per scanline: 342 VDP pixel clocks at two-thirds of a CPU
+/// clock each.
+pub const CYCLES_PER_LINE: i32 = 228;
+
+/// Leading magic on a ColecoRust state, so it can never be fed to another core.
+pub const STATE_MAGIC: &[u8; 8] = b"COLECO01";
+
+/// Largest cartridge the plain map addresses. Bank-switched boards come later.
+pub const MAX_CART: usize = 0x8000;
+
+/// The firmware the machine runs from.
+pub enum Firmware {
+    /// The reimplemented BIOS. Does not exist yet: a machine built this way
+    /// refuses to start rather than executing an empty window.
+    Hle,
+    /// A real 8 KB dump, as the development oracle.
+    Real(Box<[u8; BIOS_SIZE]>),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum MachineError {
+    HleNotYetWritten,
+    BadBiosSize(usize),
+    CartTooLarge(usize),
+}
+
+/// One controller as the player holds it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Pad {
+    pub up: bool,
+    pub down: bool,
+    pub left: bool,
+    pub right: bool,
+    /// The left button, read in joystick mode.
+    pub fire_left: bool,
+    /// The right button, read in keypad mode.
+    pub fire_right: bool,
+    /// Keypad: 0-9, 10 for `*`, 11 for `#`.
+    pub key: Option<u8>,
+}
+
+/// The four-bit code the keypad puts on the port for keys 0-9, `*`, `#`,
+/// active low. From the commonly published table, UNVERIFIED here: the
+/// BIOS's own decoder turns these back into key numbers, so running it with
+/// the real BIOS is the check, and until that is done this is a claim.
+const KEYPAD_CODES: [u8; 12] = [0x0a, 0x0d, 0x07, 0x0c, 0x02, 0x03, 0x0e, 0x05, 0x01, 0x0b, 0x06, 0x09];
+
+impl Pad {
+    /// The byte a read returns in joystick mode: directions in bits 0-3 and
+    /// the left button in bit 6, all active low.
+    fn joystick_byte(&self) -> u8 {
+        let mut held = 0;
+        if self.up {
+            held |= 0x01;
+        }
+        if self.right {
+            held |= 0x02;
+        }
+        if self.down {
+            held |= 0x04;
+        }
+        if self.left {
+            held |= 0x08;
+        }
+        if self.fire_left {
+            held |= 0x40;
+        }
+        0x7f & !held
+    }
+
+    /// Keypad mode: the key's code in bits 0-3 (`$F` for none), the right
+    /// button in bit 6.
+    fn keypad_byte(&self) -> u8 {
+        let code = match self.key {
+            Some(k) if (k as usize) < KEYPAD_CODES.len() => KEYPAD_CODES[k as usize],
+            _ => 0x0f,
+        };
+        let fire = if self.fire_right { 0 } else { 0x40 };
+        0x30 | fire | code
+    }
+}
+
+pub struct ColecoBus {
+    bios: Box<[u8; BIOS_SIZE]>,
+    cart: Vec<u8>,
+    pub ram: [u8; WORK_RAM],
+    pub vdp: Vdp,
+    pub audio: Audio,
+    pub pads: [Pad; 2],
+    /// True after a write to `$80`-`$9F`, false after `$C0`-`$DF`.
+    keypad_mode: bool,
+}
+
+impl Bus for ColecoBus {
+    fn read(&mut self, addr: u16) -> u8 {
+        match addr {
+            0x0000..=0x1fff => self.bios[addr as usize],
+            0x2000..=0x5fff => 0xff,
+            0x6000..=0x7fff => self.ram[addr as usize & (WORK_RAM - 1)],
+            _ => *self.cart.get(addr as usize - 0x8000).unwrap_or(&0xff),
+        }
+    }
+
+    fn write(&mut self, addr: u16, val: u8) {
+        if let 0x6000..=0x7fff = addr {
+            self.ram[addr as usize & (WORK_RAM - 1)] = val;
+        }
+    }
+
+    fn input(&mut self, port: u16) -> u8 {
+        let p = port as u8;
+        match p & 0xe0 {
+            0xa0 => {
+                if p & 1 == 0 {
+                    self.vdp.read_data()
+                } else {
+                    self.vdp.read_control()
+                }
+            }
+            0xe0 => {
+                let pad = &self.pads[((p >> 1) & 1) as usize];
+                if self.keypad_mode {
+                    pad.keypad_byte()
+                } else {
+                    pad.joystick_byte()
+                }
+            }
+            _ => 0xff,
+        }
+    }
+
+    fn output(&mut self, port: u16, val: u8) {
+        let p = port as u8;
+        match p & 0xe0 {
+            0x80 => self.keypad_mode = true,
+            0xa0 => {
+                if p & 1 == 0 {
+                    self.vdp.write_data(val)
+                } else {
+                    self.vdp.write_control(val)
+                }
+            }
+            0xc0 => self.keypad_mode = false,
+            0xe0 => self.audio.psg.write(val),
+            _ => {}
+        }
+    }
+}
+
+pub struct Coleco {
+    pub cpu: Z80,
+    pub bus: ColecoBus,
+    /// The VDP interrupt line as last seen, for NMI edge detection.
+    int_line: bool,
+    line_cycles: i32,
+    /// NMIs taken since power-on. A diagnostic, not machine state.
+    pub nmis: u64,
+}
+
+impl Coleco {
+    pub fn new(firmware: Firmware, cart: &[u8]) -> Result<Self, MachineError> {
+        let bios = match firmware {
+            Firmware::Hle => return Err(MachineError::HleNotYetWritten),
+            Firmware::Real(b) => b,
+        };
+        if cart.len() > MAX_CART {
+            return Err(MachineError::CartTooLarge(cart.len()));
+        }
+        let bus = ColecoBus {
+            bios,
+            cart: cart.to_vec(),
+            // Real SRAM powers up as noise. Zero is chosen for determinism;
+            // the BIOS clears what it uses.
+            ram: [0; WORK_RAM],
+            vdp: Vdp::new(),
+            audio: Audio::new(),
+            pads: [Pad::default(); 2],
+            keypad_mode: false,
+        };
+        let mut m = Coleco { cpu: Z80::new(), bus, int_line: false, line_cycles: 0, nmis: 0 };
+        m.cpu.reset();
+        Ok(m)
+    }
+
+    /// A BIOS image from a file's bytes.
+    pub fn bios_from_bytes(b: &[u8]) -> Result<Firmware, MachineError> {
+        let arr: Box<[u8; BIOS_SIZE]> =
+            b.to_vec().into_boxed_slice().try_into().map_err(|_| MachineError::BadBiosSize(b.len()))?;
+        Ok(Firmware::Real(arr))
+    }
+
+    /// Take an NMI if the VDP line has just gone active.
+    fn poll_nmi(&mut self) -> i32 {
+        let now = self.bus.vdp.irq();
+        let edge = now && !self.int_line;
+        self.int_line = now;
+        if edge {
+            self.nmis += 1;
+            self.cpu.nmi(&mut self.bus)
+        } else {
+            0
+        }
+    }
+
+    pub fn run_line(&mut self) {
+        self.bus.vdp.begin_line();
+        while self.line_cycles < CYCLES_PER_LINE {
+            let mut c = self.poll_nmi();
+            c += self.cpu.step(&mut self.bus);
+            self.line_cycles += c;
+            self.bus.audio.run(c as u32);
+        }
+        self.line_cycles -= CYCLES_PER_LINE;
+        self.bus.vdp.end_line();
+    }
+
+    pub fn run_frame(&mut self) {
+        for _ in 0..vdp::LINES_PER_FRAME {
+            self.run_line();
+        }
+    }
+
+    pub fn framebuffer(&self) -> &[u32] {
+        &self.bus.vdp.framebuffer[..]
+    }
+
+    pub fn take_audio(&mut self) -> Vec<i16> {
+        std::mem::take(&mut self.bus.audio.out)
+    }
+
+    /// Machine state. Firmware and cartridge are content, not state, and are
+    /// not included: a state loads into a machine built from the same ones.
+    pub fn save_state(&self) -> Vec<u8> {
+        let mut w = WriteCursor::new();
+        w.bytes(STATE_MAGIC);
+        w.u16(crate::SAVE_STATE_VERSION as u16);
+        self.cpu.save(&mut w);
+        w.bytes(&self.bus.ram);
+        self.bus.vdp.save(&mut w);
+        self.bus.audio.save(&mut w);
+        w.bool(self.bus.keypad_mode);
+        w.bool(self.int_line);
+        w.i32(self.line_cycles);
+        w.into_bytes()
+    }
+
+    pub fn load_state(&mut self, bytes: &[u8]) -> Result<(), LoadError> {
+        let mut r = ReadCursor::new(bytes);
+        let mut magic = [0u8; 8];
+        r.bytes(&mut magic)?;
+        if &magic != STATE_MAGIC {
+            return Err(LoadError::BadMagic);
+        }
+        let v = r.u16()?;
+        if v != crate::SAVE_STATE_VERSION as u16 {
+            return Err(LoadError::UnsupportedVersion(v));
+        }
+        self.cpu.load(&mut r)?;
+        r.bytes(&mut self.bus.ram)?;
+        self.bus.vdp.load(&mut r)?;
+        self.bus.audio.load(&mut r)?;
+        self.bus.keypad_mode = r.bool()?;
+        self.int_line = r.bool()?;
+        self.line_cycles = r.i32()?;
+        r.finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A BIOS that is all `NOP` except what a test puts in it.
+    fn machine_with(program: &[u8], at: usize) -> Coleco {
+        let mut bios = vec![0u8; BIOS_SIZE];
+        bios[at..at + program.len()].copy_from_slice(program);
+        Coleco::new(Coleco::bios_from_bytes(&bios).unwrap(), &[]).unwrap()
+    }
+
+    #[test]
+    fn hle_refuses_to_start_until_it_exists() {
+        assert_eq!(Coleco::new(Firmware::Hle, &[]).err(), Some(MachineError::HleNotYetWritten));
+    }
+
+    #[test]
+    fn one_kilobyte_of_ram_is_mirrored_eight_times() {
+        let mut m = machine_with(&[], 0);
+        m.bus.write(0x6005, 0x42);
+        for mirror in 0..8u16 {
+            assert_eq!(m.bus.read(0x6005 + mirror * 0x400), 0x42);
+        }
+        assert_eq!(m.bus.read(0x7fff), m.bus.ram[0x3ff]);
+    }
+
+    #[test]
+    fn the_bios_is_not_writable_and_open_bus_reads_ff() {
+        let mut m = machine_with(&[0x12], 0x100);
+        m.bus.write(0x0100, 0x99);
+        assert_eq!(m.bus.read(0x0100), 0x12);
+        assert_eq!(m.bus.read(0x2000), 0xff);
+        assert_eq!(m.bus.read(0x8000), 0xff, "no cartridge");
+    }
+
+    /// Ports decode on bits 7-5: `$BE` and `$A0` are the same data port,
+    /// `$BF` and `$A1` the same control port.
+    #[test]
+    fn vdp_ports_decode_on_the_top_three_bits() {
+        let mut m = machine_with(&[], 0);
+        m.bus.output(0xa1, 0x07);
+        m.bus.output(0xbf, 0x87); // register 7 = 7, via a mirror
+        assert_eq!(m.bus.vdp.regs[7], 0x07);
+    }
+
+    #[test]
+    fn controller_mode_follows_the_last_strobe() {
+        let mut m = machine_with(&[], 0);
+        m.bus.pads[0] = Pad { up: true, key: Some(1), ..Pad::default() };
+        m.bus.output(0xc0, 0);
+        assert_eq!(m.bus.input(0xfc) & 0x0f, 0x0e, "joystick: up is bit 0, active low");
+        m.bus.output(0x80, 0);
+        assert_eq!(m.bus.input(0xfc) & 0x0f, KEYPAD_CODES[1]);
+        assert_eq!(m.bus.input(0xff) & 0x0f, 0x0f, "port 2 has no key down");
+    }
+
+    /// The VDP interrupt is an NMI and is edge-triggered: F staying set does
+    /// not interrupt again until the status read drops the line and it rises
+    /// once more.
+    #[test]
+    fn the_vdp_interrupt_is_one_nmi_per_rising_edge() {
+        // At $0066, the NMI vector: RETN. The main program spins on NOPs.
+        let mut m = machine_with(&[0xed, 0x45], 0x66);
+        m.bus.vdp.regs[1] = 0x20;
+        for _ in 0..3 {
+            m.run_frame();
+        }
+        assert_eq!(m.nmis, 1, "nobody read status, so F never dropped");
+
+        // Now a handler that reads status (IN A,($BF)) before returning.
+        let mut m = machine_with(&[0xdb, 0xbf, 0xed, 0x45], 0x66);
+        m.bus.vdp.regs[1] = 0x20;
+        for _ in 0..3 {
+            m.run_frame();
+        }
+        assert_eq!(m.nmis, 3, "one per frame");
+    }
+
+    #[test]
+    fn a_state_round_trips_and_resumes_identically() {
+        let mut a = machine_with(&[0xdb, 0xbf, 0xed, 0x45], 0x66);
+        a.bus.vdp.regs[1] = 0x20;
+        a.run_frame();
+        let s = a.save_state();
+        let mut b = machine_with(&[0xdb, 0xbf, 0xed, 0x45], 0x66);
+        b.load_state(&s).unwrap();
+        assert_eq!(b.save_state(), s);
+        a.run_frame();
+        b.run_frame();
+        assert_eq!(a.save_state(), b.save_state());
+    }
+}
