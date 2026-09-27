@@ -11,7 +11,10 @@
 //!
 //! `--key FRAME:K` holds keypad key K (0-9, `*`, `#`) on controller 1 for ten
 //! frames from FRAME, and can be given more than once. `--fire FRAME` holds
-//! both fire buttons for ten frames the same way.
+//! both fire buttons for ten frames the same way. `--until-cart` stops at the
+//! cartridge's first instruction instead, and `--vram OUT` writes the 16 KB of
+//! VRAM as it stands at the end. `--probe` attaches the census probe and
+//! prints the BIOS entries it saw, with their callers, and the data reads.
 
 use coleco_core::machine::{Coleco, Firmware, Pad};
 use coleco_core::vdp::{HEIGHT, WIDTH};
@@ -22,7 +25,7 @@ mod png;
 use png::write_png;
 
 fn usage() -> ! {
-    eprintln!("usage: coleco [--bios PATH] [--frames N] [--png OUT] [--key FRAME:K]... [--fire FRAME]... CART");
+    eprintln!("usage: coleco [--bios PATH] [--frames N] [--png OUT] [--key FRAME:K]... [--fire FRAME]... [--until-cart] [--vram OUT] [--probe] CART");
     eprintln!();
     eprintln!("Runs CART for N frames (default 60) on the real BIOS at PATH, or on");
     eprintln!("the HLE when no --bios is given, and optionally writes the last frame.");
@@ -36,12 +39,18 @@ fn main() {
     let mut cart: Option<String> = None;
     let mut keys: Vec<(u32, u8)> = Vec::new();
     let mut fires: Vec<u32> = Vec::new();
+    let mut until_cart = false;
+    let mut probe = false;
+    let mut vram_out: Option<String> = None;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--bios" => bios = Some(args.next().unwrap_or_else(|| usage())),
             "--frames" => frames = args.next().and_then(|v| v.parse().ok()).unwrap_or_else(|| usage()),
             "--png" => png = Some(args.next().unwrap_or_else(|| usage())),
+            "--until-cart" => until_cart = true,
+            "--probe" => probe = true,
+            "--vram" => vram_out = Some(args.next().unwrap_or_else(|| usage())),
             "--key" => keys.push(parse_key(&args.next().unwrap_or_else(|| usage()))),
             "--fire" => fires.push(args.next().and_then(|v| v.parse().ok()).unwrap_or_else(|| usage())),
             "-h" | "--help" => usage(),
@@ -73,6 +82,17 @@ fn main() {
         std::process::exit(1)
     });
 
+    if probe {
+        m.bus.probe = Some(Box::new(coleco_core::census::Probe::new()));
+    }
+    if until_cart {
+        let mut steps = 0u64;
+        while m.cpu.pc < 0x8000 && steps < 40_000_000 {
+            m.step();
+            steps += 1;
+        }
+        frames = 0;
+    }
     for f in 0..frames {
         let key = keys.iter().find(|&&(at, _)| f >= at && f < at + 10).map(|&(_, k)| k);
         let fire = fires.iter().any(|&at| f >= at && f < at + 10);
@@ -92,7 +112,29 @@ fn main() {
     );
     println!("  vdp regs {:02X?}", m.bus.vdp.regs);
     println!("  audio    {} samples, peak {peak}", audio.len());
+    if let Some(p) = &m.bus.probe {
+        for (a, e) in &p.entries {
+            let callers: Vec<String> = e.callers.iter().map(|c| format!("{c:04X}")).collect();
+            println!("  probe    entry {a:04X} x{} from {}", e.calls, callers.join(","));
+        }
+        let reads: Vec<String> = p.data_reads.iter().map(|(a, n)| format!("{a:04X}x{n}")).collect();
+        println!("  probe    BIOS data reads: {}", reads.join(" "));
+    }
+    if mode == BiosMode::Hle {
+        let fmt = |m: &std::collections::BTreeMap<u16, u64>| {
+            m.iter().map(|(a, n)| format!("{a:04X}x{n}")).collect::<Vec<_>>().join(" ")
+        };
+        println!("  hle      unwritten routines called: {}", fmt(&m.hle_log.unimplemented));
+        println!("  hle      wild BIOS addresses reached: {}", fmt(&m.hle_log.wild));
+        for (a, from) in &m.hle_log.wild_from {
+            println!("  hle      wild {a:04X} first reached from {from:04X}");
+        }
+    }
 
+    if let Some(out) = vram_out {
+        std::fs::write(&out, &m.bus.vdp.vram[..]).expect("write vram");
+        println!("  wrote    {out} (VRAM)");
+    }
     if let Some(out) = png {
         let rgb: Vec<u8> = m.framebuffer().iter().flat_map(|&p| [(p >> 16) as u8, (p >> 8) as u8, p as u8]).collect();
         if let Err(e) = write_png(&out, WIDTH as u32, HEIGHT as u32, &rgb) {

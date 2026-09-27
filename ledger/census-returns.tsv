@@ -1,0 +1,21 @@
+address	kind	titles	returns	sample_titles
+0100	odd	1	2	Heist, The
+0244	odd	1	1	Illusions
+0245	resume	1	1	Illusions
+028D	resume	6	4373	Carnival; Destructor; Fortune Builder
+03C6	odd	7	28	Artillery Duel; Carnival; Destructor
+0461	odd	7	28	Artillery Duel; Carnival; Destructor
+115B	resume	6	18	Adam's Musicbox Demo; Burgertime; Donkey Kong Jr
+11A0	resume	2	12	Moonsweeper; Star Wars - The Arcade Game
+11AF	resume	2	6	Moonsweeper; Star Wars - The Arcade Game
+11C4	resume	4	23	Adam's Musicbox Demo; Burgertime; Oil's Well
+11E8	resume	3	13	Adam's Musicbox Demo; Oil's Well; Super Action Soccer
+11F3	resume	4	30	Adam's Musicbox Demo; Burgertime; Oil's Well
+1214	resume	2	3	Donkey Kong Jr; Super Action Soccer
+121F	resume	4	15	Burgertime; Oil's Well; Super Action Soccer
+1228	resume	4	16	Adam's Musicbox Demo; Oil's Well; Super Action Soccer
+1230	resume	3	22	Adam's Musicbox Demo; Oil's Well; Super Action Soccer
+1247	resume	4	18	Adam's Musicbox Demo; Oil's Well; Super Action Soccer
+124F	resume	3	25	Adam's Musicbox Demo; Burgertime; Super Action Soccer
+18E8	resume	1	8	Power Lords - Quest for Volcan
+1AE1	odd	1	2	Mr. Do's Castle

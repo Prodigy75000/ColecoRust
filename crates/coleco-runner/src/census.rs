@@ -257,10 +257,49 @@ fn main() {
     }
     std::fs::write(format!("{out}/census-data-reads.tsv"), tsv).expect("write");
 
+    // ---- returns into the BIOS ----
+    // A return landing just after a CALL or RST in the real BIOS is the BIOS
+    // resuming after a call-back into the cartridge: ordinary. Anything else
+    // means the game returned into the BIOS through a stack word of its own.
+    let resume = |a: u16| {
+        let at = |o: u16| bios.get(a.wrapping_sub(o) as usize).copied().unwrap_or(0);
+        let call = |op: u8| op == 0xcd || op & 0xc7 == 0xc4;
+        let rst = |op: u8| op & 0xc7 == 0xc7;
+        call(at(3)) || rst(at(1))
+    };
+    let mut rets: BTreeMap<u16, (usize, u64, Vec<String>)> = BTreeMap::new();
+    for t in &titles {
+        for (&a, e) in &t.probe.returns_into {
+            let r = rets.entry(a).or_default();
+            r.0 += 1;
+            r.1 += e.calls;
+            if r.2.len() < 3 {
+                r.2.push(t.title.clone());
+            }
+        }
+    }
+    let mut tsv = String::from("address\tkind\ttitles\treturns\tsample_titles\n");
+    for (a, (n, calls, ts)) in &rets {
+        let kind = if resume(*a) { "resume" } else { "odd" };
+        tsv.push_str(&format!("{a:04X}\t{kind}\t{n}\t{calls}\t{}\n", ts.join("; ")));
+    }
+    std::fs::write(format!("{out}/census-returns.tsv"), tsv).expect("write");
+    let odd: Vec<String> = rets
+        .iter()
+        .filter(|(a, _)| !resume(**a))
+        .map(|(a, (n, _, ts))| format!("{a:04X} ({n}: {})", ts.join("; ")))
+        .collect();
+
     // ---- summary and coverage ----
     let commercial: Vec<&Title> = titles.iter().filter(|t| t.class == "commercial").collect();
     println!("{} titles ({} commercial) under {dir}", titles.len(), commercial.len());
     println!("{} distinct BIOS entry points used", entries.len());
+    println!(
+        "returns into the BIOS: {} addresses, {} not after a CALL/RST in the real BIOS: {}",
+        rets.len(),
+        odd.len(),
+        odd.join(", ")
+    );
     let no_calls = commercial.iter().filter(|t| t.probe.entries.is_empty()).count();
     println!("commercial titles calling nothing after boot: {no_calls}");
     let data_titles = commercial.iter().filter(|t| !t.probe.data_reads.is_empty()).count();

@@ -201,12 +201,12 @@ impl Z80 {
     pub fn hl(&self) -> u16 {
         u16::from_be_bytes([self.r[H], self.r[L]])
     }
-    fn set_bc(&mut self, v: u16) {
+    pub fn set_bc(&mut self, v: u16) {
         let b = v.to_be_bytes();
         self.r[B] = b[0];
         self.r[C] = b[1];
     }
-    fn set_de(&mut self, v: u16) {
+    pub fn set_de(&mut self, v: u16) {
         let b = v.to_be_bytes();
         self.r[D] = b[0];
         self.r[E] = b[1];
@@ -224,7 +224,7 @@ impl Z80 {
         self.set_hl(v);
     }
 
-    fn set_hl(&mut self, v: u16) {
+    pub fn set_hl(&mut self, v: u16) {
         let b = v.to_be_bytes();
         self.r[H] = b[0];
         self.r[L] = b[1];

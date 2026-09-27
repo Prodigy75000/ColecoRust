@@ -48,8 +48,8 @@ pub const MAX_CART: usize = 0x8000;
 
 /// The firmware the machine runs from.
 pub enum Firmware {
-    /// The reimplemented BIOS. Does not exist yet: a machine built this way
-    /// refuses to start rather than executing an empty window.
+    /// The reimplemented BIOS: our own image, with traps into host code.
+    /// See [`crate::hle`].
     Hle,
     /// A real 8 KB dump, as the development oracle.
     Real(Box<[u8; BIOS_SIZE]>),
@@ -57,7 +57,6 @@ pub enum Firmware {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum MachineError {
-    HleNotYetWritten,
     BadBiosSize(usize),
     CartTooLarge(usize),
 }
@@ -206,14 +205,22 @@ pub struct Coleco {
     /// The VDP interrupt line as last seen, for NMI edge detection.
     int_line: bool,
     line_cycles: i32,
+    /// True between a line's `begin_line` and its `end_line`, so the machine
+    /// can be stepped one instruction at a time and stop anywhere.
+    in_line: bool,
     /// NMIs taken since power-on. A diagnostic, not machine state.
     pub nmis: u64,
+    /// True when running on the HLE, so BIOS-window PCs go through its traps.
+    hle: bool,
+    /// What the HLE could not serve. Diagnostics, not machine state.
+    pub hle_log: crate::hle::HleLog,
 }
 
 impl Coleco {
     pub fn new(firmware: Firmware, cart: &[u8]) -> Result<Self, MachineError> {
+        let hle = matches!(firmware, Firmware::Hle);
         let bios = match firmware {
-            Firmware::Hle => return Err(MachineError::HleNotYetWritten),
+            Firmware::Hle => crate::hle::image(),
             Firmware::Real(b) => b,
         };
         if cart.len() > MAX_CART {
@@ -231,7 +238,16 @@ impl Coleco {
             keypad_mode: false,
             probe: None,
         };
-        let mut m = Coleco { cpu: Z80::new(), bus, int_line: false, line_cycles: 0, nmis: 0 };
+        let mut m = Coleco {
+            cpu: Z80::new(),
+            bus,
+            int_line: false,
+            line_cycles: 0,
+            in_line: false,
+            nmis: 0,
+            hle,
+            hle_log: Default::default(),
+        };
         m.cpu.reset();
         Ok(m)
     }
@@ -256,12 +272,23 @@ impl Coleco {
         }
     }
 
-    pub fn run_line(&mut self) {
-        self.bus.vdp.begin_line();
-        while self.line_cycles < CYCLES_PER_LINE {
+    /// Execute one instruction (and an NMI first, if one is due), opening and
+    /// closing scanlines as the cycle count crosses them. Everything else in
+    /// the frame loop is built on this, so a harness that stops mid-frame sees
+    /// exactly the machine a whole-frame run would.
+    pub fn step(&mut self) {
+        if !self.in_line {
+            self.bus.vdp.begin_line();
+            self.in_line = true;
+        }
+        {
+            let interrupted = self.cpu.pc;
             let mut c = self.poll_nmi();
             if self.bus.probe.is_some() {
                 let pc = self.cpu.pc;
+                if c > 0 {
+                    self.bus.probe.as_mut().unwrap().nmi_from(interrupted);
+                }
                 let op = [self.bus.peek(pc), self.bus.peek(pc.wrapping_add(1))];
                 let p = self.bus.probe.as_mut().unwrap();
                 p.cycles(pc, c);
@@ -271,7 +298,18 @@ impl Coleco {
                 }
             }
             let pc = self.cpu.pc;
-            let s = self.cpu.step(&mut self.bus);
+            let trapped = if self.hle && pc < 0x2000 {
+                crate::hle::trap(&mut self.cpu, &mut self.bus, &mut self.hle_log)
+            } else {
+                None
+            };
+            let s = match trapped {
+                Some(c) => c,
+                None => self.cpu.step(&mut self.bus),
+            };
+            if self.hle {
+                self.hle_log.prev_pc = pc;
+            }
             if let Some(p) = &mut self.bus.probe {
                 p.cycles(pc, s);
             }
@@ -279,8 +317,20 @@ impl Coleco {
             self.line_cycles += c;
             self.bus.audio.run(c as u32);
         }
-        self.line_cycles -= CYCLES_PER_LINE;
-        self.bus.vdp.end_line();
+        if self.line_cycles >= CYCLES_PER_LINE {
+            self.line_cycles -= CYCLES_PER_LINE;
+            self.bus.vdp.end_line();
+            self.in_line = false;
+        }
+    }
+
+    pub fn run_line(&mut self) {
+        loop {
+            self.step();
+            if !self.in_line {
+                break;
+            }
+        }
     }
 
     pub fn run_frame(&mut self) {
@@ -310,6 +360,7 @@ impl Coleco {
         w.bool(self.bus.keypad_mode);
         w.bool(self.int_line);
         w.i32(self.line_cycles);
+        w.bool(self.in_line);
         w.into_bytes()
     }
 
@@ -331,6 +382,7 @@ impl Coleco {
         self.bus.keypad_mode = r.bool()?;
         self.int_line = r.bool()?;
         self.line_cycles = r.i32()?;
+        self.in_line = r.bool()?;
         r.finish()
     }
 }
@@ -347,8 +399,52 @@ mod tests {
     }
 
     #[test]
-    fn hle_refuses_to_start_until_it_exists() {
-        assert_eq!(Coleco::new(Firmware::Hle, &[]).err(), Some(MachineError::HleNotYetWritten));
+    fn hle_boots_a_skip_header_cart_straight_to_its_start() {
+        // $55AA: no title screen. Start address $8123 at $800A.
+        let mut cart = vec![0u8; 0x100];
+        cart[0..2].copy_from_slice(&[0x55, 0xaa]);
+        cart[0x0a..0x0c].copy_from_slice(&[0x23, 0x81]);
+        let mut m = Coleco::new(Firmware::Hle, &cart).unwrap();
+        m.step();
+        assert_eq!((m.cpu.pc, m.cpu.sp, m.cpu.hl()), (0x8123, 0x73b9, 0x8123));
+    }
+
+    #[test]
+    fn hle_hands_a_title_header_cart_the_title_screens_machine() {
+        let mut cart = vec![0u8; 0x100];
+        cart[0..2].copy_from_slice(&[0xaa, 0x55]);
+        cart[0x0a..0x0c].copy_from_slice(&[0x50, 0x80]);
+        let mut m = Coleco::new(Firmware::Hle, &cart).unwrap();
+        m.step();
+        assert_eq!(m.cpu.pc, 0x8050);
+        assert_eq!(m.bus.vdp.regs, [0x00, 0x80, 0x06, 0x80, 0x00, 0x36, 0x07, 0x00]);
+        assert_eq!(m.bus.ram[0x3c4], 0x80, "the register 1 shadow");
+        assert_ne!(m.bus.vdp.vram[b'A' as usize * 8..b'A' as usize * 8 + 8], [0u8; 8], "font loaded");
+    }
+
+    #[test]
+    fn hle_parks_a_cart_with_no_header() {
+        let mut m = Coleco::new(Firmware::Hle, &[0u8; 0x100]).unwrap();
+        for _ in 0..3 {
+            m.run_frame();
+        }
+        // This Z80 holds the PC on the HALT while halted.
+        assert_eq!(m.cpu.pc, 0x0003, "parked on the HALT at $0003");
+        assert!(m.cpu.halted);
+    }
+
+    /// An unwritten routine returns to its caller and is logged.
+    #[test]
+    fn an_unwritten_routine_returns_and_is_logged() {
+        // Cart: at $8100, CALL $1F61 (a table slot), then JR $ (spin).
+        let mut cart = vec![0u8; 0x200];
+        cart[0..2].copy_from_slice(&[0x55, 0xaa]);
+        cart[0x0a..0x0c].copy_from_slice(&[0x00, 0x81]);
+        cart[0x100..0x105].copy_from_slice(&[0xcd, 0x61, 0x1f, 0x18, 0xfe]);
+        let mut m = Coleco::new(Firmware::Hle, &cart).unwrap();
+        m.run_frame();
+        assert_eq!(m.cpu.pc, 0x8103, "back after the CALL, spinning");
+        assert_eq!(m.hle_log.unimplemented.get(&0x0300), Some(&1));
     }
 
     #[test]

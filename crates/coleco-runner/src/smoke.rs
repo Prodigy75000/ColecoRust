@@ -4,6 +4,11 @@
 //! `smoke`: run every cartridge under a directory and write one ledger row each.
 //!
 //!   smoke --bios bios/coleco.rom --out out/smoke dumps/corpus
+//!   smoke --hle --out out/smoke-hle dumps/corpus
+//!
+//! `--hle` runs on ColecoRust's own BIOS instead of a dump, and the last two
+//! ledger columns then count the distinct unwritten routines the title called
+//! and the distinct BIOS addresses it reached that are no routine at all.
 //!
 //! Every title gets the same script: 1500 frames (25 s), keypad 1 held for ten
 //! frames at 760, 1000 and 1240 (the first just after the title screen's
@@ -27,7 +32,7 @@
 //! tell a working game from a nicely animated wrong one. The PNGs and contact
 //! sheets are there for the eye.
 
-use coleco_core::machine::Coleco;
+use coleco_core::machine::{Coleco, Firmware};
 use corpus::{classify, header, FRAMES};
 use coleco_core::vdp::{HEIGHT, WIDTH};
 use std::path::{Path, PathBuf};
@@ -57,10 +62,12 @@ struct Row {
     moving: bool,
     peak: u16,
     pc: u16,
+    hle_unimplemented: usize,
+    hle_wild: usize,
     frame: Vec<u32>,
 }
 
-fn run_one(bios: &[u8], path: &Path, root: &Path) -> Row {
+fn run_one(bios: Option<&[u8]>, path: &Path, root: &Path) -> Row {
     let file = path.strip_prefix(root).unwrap_or(path).to_string_lossy().replace('\\', "/");
     let cart = std::fs::read(path).unwrap_or_default();
     let (class, dump, title) = classify(&file);
@@ -79,9 +86,14 @@ fn run_one(bios: &[u8], path: &Path, root: &Path) -> Row {
         moving: false,
         peak: 0,
         pc: 0,
+        hle_unimplemented: 0,
+        hle_wild: 0,
         frame: vec![0xff00_0000; WIDTH * HEIGHT],
     };
-    let firmware = Coleco::bios_from_bytes(bios).expect("bios size checked in main");
+    let firmware = match bios {
+        Some(b) => Coleco::bios_from_bytes(b).expect("bios size checked in main"),
+        None => Firmware::Hle,
+    };
     let Ok(mut m) = Coleco::new(firmware, &cart) else { return row };
 
     let mut before_still: Vec<u32> = Vec::new();
@@ -109,6 +121,8 @@ fn run_one(bios: &[u8], path: &Path, root: &Path) -> Row {
     row.colours = seen.len();
     row.nmis = m.nmis;
     row.pc = m.cpu.pc;
+    row.hle_unimplemented = m.hle_log.unimplemented.len();
+    row.hle_wild = m.hle_log.wild.len();
 
     let display_on = m.bus.vdp.regs[1] & 0x40 != 0;
     let open_bus = (0x2000..0x6000).contains(&m.cpu.pc);
@@ -137,22 +151,26 @@ fn run_one(bios: &[u8], path: &Path, root: &Path) -> Row {
 
 fn main() {
     let mut bios_path: Option<String> = None;
+    let mut hle = false;
     let mut out = String::from("out/smoke");
     let mut dir: Option<String> = None;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--bios" => bios_path = args.next(),
+            "--hle" => hle = true,
             "--out" => out = args.next().unwrap_or(out),
             _ => dir = Some(a),
         }
     }
-    let (Some(bios_path), Some(dir)) = (bios_path, dir) else {
-        eprintln!("usage: smoke --bios PATH [--out DIR] CARTDIR");
+    let Some(dir) = dir.filter(|_| hle != bios_path.is_some()) else {
+        eprintln!("usage: smoke (--bios PATH | --hle) [--out DIR] CARTDIR");
         std::process::exit(2);
     };
-    let bios = std::fs::read(&bios_path).expect("read bios");
-    Coleco::bios_from_bytes(&bios).expect("an 8 KB BIOS");
+    let bios = bios_path.map(|p| std::fs::read(&p).expect("read bios"));
+    if let Some(b) = &bios {
+        Coleco::bios_from_bytes(b).expect("an 8 KB BIOS");
+    }
     let root = PathBuf::from(&dir);
     let paths = corpus::cartridges(&root);
     std::fs::create_dir_all(&out).expect("create out dir");
@@ -167,7 +185,7 @@ fn main() {
             let (jobs, results, bios, root) = (jobs.clone(), results.clone(), bios.clone(), root.clone());
             std::thread::spawn(move || loop {
                 let Some((i, p)) = jobs.lock().unwrap().pop() else { break };
-                let row = run_one(&bios, &p, &root);
+                let row = run_one(bios.as_deref(), &p, &root);
                 results.lock().unwrap().push((i, row));
             })
         })
@@ -179,11 +197,11 @@ fn main() {
     rows.sort_by_key(|(i, _)| *i);
 
     let mut tsv = String::from(
-        "n\tverdict\tclass\tdump\ttitle\tfile\tcrc32\tsize\theader\tfirst_cart_frame\tnmis\tcolours\tmoving\tpeak\tend_pc\n",
+        "n\tverdict\tclass\tdump\ttitle\tfile\tcrc32\tsize\theader\tfirst_cart_frame\tnmis\tcolours\tmoving\tpeak\tend_pc\thle_unimplemented\thle_wild\n",
     );
     for (i, r) in &rows {
         tsv.push_str(&format!(
-            "{}\t{}\t{}\t{}\t{}\t{}\t{:08x}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:04x}\n",
+            "{}\t{}\t{}\t{}\t{}\t{}\t{:08x}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:04x}\t{}\t{}\n",
             i,
             r.verdict,
             r.class,
@@ -198,7 +216,9 @@ fn main() {
             r.colours,
             r.moving,
             r.peak,
-            r.pc
+            r.pc,
+            r.hle_unimplemented,
+            r.hle_wild
         ));
     }
     std::fs::write(format!("{out}/smoke.tsv"), &tsv).expect("write tsv");

@@ -42,6 +42,7 @@
 //! host side.
 
 pub mod census;
+pub mod hle;
 pub mod machine;
 pub mod psg;
 pub mod save;
@@ -74,7 +75,8 @@ pub const BIOS_SIZE: usize = 8 * 1024;
 ///
 /// v1: the first layout (Z80, RAM, VDP, PSG and resampler, controller mode,
 /// the NMI line, the line cycle counter), 2026-09-27.
-pub const SAVE_STATE_VERSION: u32 = 1;
+/// v2: whether a scanline is open, so a state can be taken mid-line.
+pub const SAVE_STATE_VERSION: u32 = 2;
 
 /// How the machine gets its BIOS behaviour.
 ///

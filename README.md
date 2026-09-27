@@ -100,7 +100,7 @@ is the right one here, but it needs a rule or it becomes an opinion:
 | SN76489 | adapted from MegaRust to TI's SN76489AN (15-bit noise register); 44.1 kHz mono |
 | Controllers and keypad | joystick and keypad modes; keypad key 1 confirmed through the real BIOS, the other eleven codes unverified |
 | Mapper / bank switching | not started |
-| HLE BIOS | not started |
+| HLE BIOS | boot and image: hand-over as the real BIOS leaves it (boot delay skipped), our own font, vectors, jump table. No routines yet. All 14 census titles that call no routine run as on the real BIOS; 25 commercial titles ALIVE with no BIOS file; `ledger/smoke-hle.tsv` |
 | Save states | v1 layout, fixed size, round-trip tested |
 | libretro | not started |
 | Corpus smoke, REAL BIOS | 151 of 164 commercial titles and 42 of 48 PD titles ALIVE, 0 crashed; `ledger/smoke-real-bios.tsv`, `cargo run --release -p coleco-runner --bin smoke` |

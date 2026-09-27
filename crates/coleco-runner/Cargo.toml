@@ -23,6 +23,11 @@ path = "src/smoke.rs"
 name = "census"
 path = "src/census.rs"
 
+# The machine as the BIOS leaves it at hand-over, and what every title shares.
+[[bin]]
+name = "handover"
+path = "src/handover.rs"
+
 # Z80 conformance: ZEXDOC then ZEXALL, on a minimal test bus. Lifted from
 # MegaRust with the CPU.
 [[bin]]

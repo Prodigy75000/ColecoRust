@@ -52,6 +52,16 @@ pub struct Probe {
     started: bool,
     /// Entry address to (calls, callers seen).
     pub entries: BTreeMap<u16, Entry>,
+    /// Returns from cartridge code INTO the BIOS window, by address landed on.
+    /// Most are the BIOS resuming after calling back into the cartridge, but
+    /// a game can also return into the BIOS through a stack word it crafted
+    /// or never cleaned up (Heist returns to `$0100`), and then it depends on
+    /// whatever the BIOS has there exactly as if it had called it. The first
+    /// census excluded all returns from `entries` and so could not see this.
+    /// Returns by RETN/RETI are left out: the VDP's NMI can interrupt BIOS
+    /// code anywhere, and the cartridge's handler resuming it is ordinary, at
+    /// whatever address it happened to interrupt.
+    pub returns_into: BTreeMap<u16, Entry>,
     /// BIOS address to times read as data from outside the BIOS.
     pub data_reads: BTreeMap<u16, u64>,
     last_writer: Vec<Writer>,
@@ -65,6 +75,10 @@ pub struct Probe {
     pub cycles_other: u64,
     /// Set once cartridge code has executed; cycles are only counted after.
     pub cart_seen: bool,
+    /// Addresses NMIs interrupted and not yet returned to, newest last. A
+    /// return landing on one is the handler resuming what it interrupted,
+    /// by RETN or by a plain RET; either way not the game's own doing.
+    nmi_resume: Vec<u16>,
 }
 
 #[derive(Default, Clone, Debug)]
@@ -107,8 +121,13 @@ impl Probe {
         if pc >= 0x8000 {
             self.cart_seen = true;
         }
-        if self.started && in_bios(pc) && !in_bios(self.prev_pc) && !nmi && !is_return(self.prev_op) {
-            let e = self.entries.entry(pc).or_default();
+        let interrupt_return = is_return(self.prev_op) && self.nmi_resume.last() == Some(&pc);
+        if interrupt_return {
+            self.nmi_resume.pop();
+        }
+        if self.started && in_bios(pc) && !in_bios(self.prev_pc) && !nmi && !interrupt_return {
+            let map = if is_return(self.prev_op) { &mut self.returns_into } else { &mut self.entries };
+            let e = map.entry(pc).or_default();
             e.calls += 1;
             if e.callers.len() < 8 && !e.callers.contains(&self.prev_pc) {
                 e.callers.push(self.prev_pc);
@@ -118,6 +137,16 @@ impl Probe {
         self.prev_pc = pc;
         self.prev_op = op;
         self.pc = pc;
+    }
+
+    /// An NMI is being delivered, interrupting the instruction at `pc`.
+    pub(crate) fn nmi_from(&mut self, pc: u16) {
+        // Bounded: a handler that never returns (some reset the stack) must
+        // not grow this without limit.
+        if self.nmi_resume.len() == 8 {
+            self.nmi_resume.remove(0);
+        }
+        self.nmi_resume.push(pc);
     }
 
     pub(crate) fn cycles(&mut self, pc: u16, c: i32) {
@@ -176,6 +205,24 @@ mod tests {
         assert_eq!(p.entries.len(), 1);
         assert_eq!(p.entries[&0x1f61].calls, 1);
         assert_eq!(p.entries[&0x1f61].callers, vec![0x8100]);
+        assert_eq!(p.returns_into[&0x0500].callers, vec![0x8200], "the return is kept apart");
+    }
+
+    /// The cartridge's NMI handler resuming BIOS code it interrupted is
+    /// neither an entry nor a return worth reporting, wherever it lands.
+    #[test]
+    fn an_interrupt_handler_resuming_the_bios_is_not_recorded() {
+        let mut p = Probe::new();
+        p.instruction(0x0440, [0x00, 0x00], false); // BIOS code runs
+        p.nmi_from(0x0441); // an NMI interrupts it before $0441
+        p.instruction(0x0066, [0xc3, 0x21], true);
+        p.instruction(0x8300, [0xc9, 0x00], false); // the cart's handler ends in a plain RET
+        p.instruction(0x0441, [0x00, 0x00], false); // back mid-routine
+        assert!(p.entries.is_empty() && p.returns_into.is_empty());
+        // A RET to somewhere no NMI interrupted IS recorded.
+        p.instruction(0x8300, [0xc9, 0x00], false);
+        p.instruction(0x0100, [0x00, 0x00], false);
+        assert_eq!(p.returns_into.len(), 1);
     }
 
     #[test]
