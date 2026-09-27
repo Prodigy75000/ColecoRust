@@ -33,15 +33,15 @@
 //! sheets are there for the eye.
 
 use coleco_core::machine::{Coleco, Firmware};
-use corpus::{classify, header, FRAMES};
 use coleco_core::vdp::{HEIGHT, WIDTH};
+use corpus::{classify, header, FRAMES};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-#[path = "png.rs"]
-mod png;
 #[path = "corpus.rs"]
 mod corpus;
+#[path = "png.rs"]
+mod png;
 
 const STILL_WINDOW: u32 = 100;
 /// Thumbnails on a contact sheet, eight across.
@@ -70,7 +70,11 @@ struct Row {
 }
 
 fn run_one(bios: Option<&[u8]>, path: &Path, root: &Path) -> Row {
-    let file = path.strip_prefix(root).unwrap_or(path).to_string_lossy().replace('\\', "/");
+    let file = path
+        .strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/");
     let cart = std::fs::read(path).unwrap_or_default();
     let (class, dump, title) = classify(&file);
     let mut row = Row {
@@ -97,7 +101,9 @@ fn run_one(bios: Option<&[u8]>, path: &Path, root: &Path) -> Row {
         Some(b) => Coleco::bios_from_bytes(b).expect("bios size checked in main"),
         None => Firmware::Hle,
     };
-    let Ok(mut m) = Coleco::new(firmware, &cart) else { return row };
+    let Ok(mut m) = Coleco::new(firmware, &cart) else {
+        return row;
+    };
 
     let mut before_still: Vec<u32> = Vec::new();
     for f in 0..FRAMES {
@@ -186,16 +192,24 @@ fn main() {
     let paths = corpus::cartridges(&root);
     std::fs::create_dir_all(&out).expect("create out dir");
 
-    let jobs = Arc::new(Mutex::new(paths.clone().into_iter().enumerate().collect::<Vec<_>>()));
+    let jobs = Arc::new(Mutex::new(
+        paths.clone().into_iter().enumerate().collect::<Vec<_>>(),
+    ));
     let results = Arc::new(Mutex::new(Vec::new()));
-    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(16);
+    let threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .min(16);
     let bios = Arc::new(bios);
     let root = Arc::new(root);
     let handles: Vec<_> = (0..threads)
         .map(|_| {
-            let (jobs, results, bios, root) = (jobs.clone(), results.clone(), bios.clone(), root.clone());
+            let (jobs, results, bios, root) =
+                (jobs.clone(), results.clone(), bios.clone(), root.clone());
             std::thread::spawn(move || loop {
-                let Some((i, p)) = jobs.lock().unwrap().pop() else { break };
+                let Some((i, p)) = jobs.lock().unwrap().pop() else {
+                    break;
+                };
                 let row = run_one(bios.as_deref(), &p, &root);
                 results.lock().unwrap().push((i, row));
             })
@@ -251,13 +265,24 @@ fn main() {
                 }
             }
         }
-        png::write_png(&format!("{out}/sheet-{s:02}.png"), w as u32, h as u32, &rgb).expect("write sheet");
+        png::write_png(&format!("{out}/sheet-{s:02}.png"), w as u32, h as u32, &rgb)
+            .expect("write sheet");
     }
 
-    const ORDER: [&str; 6] = ["ALIVE", "STATIC", "BLANK", "CRASHED", "NO_CART", "LOAD_ERROR"];
+    const ORDER: [&str; 6] = [
+        "ALIVE",
+        "STATIC",
+        "BLANK",
+        "CRASHED",
+        "NO_CART",
+        "LOAD_ERROR",
+    ];
     println!("{} files under {dir}", rows.len());
     for v in ORDER {
-        println!("  {v:<10} {}", rows.iter().filter(|(_, r)| r.verdict == v).count());
+        println!(
+            "  {v:<10} {}",
+            rows.iter().filter(|(_, r)| r.verdict == v).count()
+        );
     }
     // Per title: its best verdict over the dumps not known to be bad. A title
     // whose only dumps are bad is counted apart, not as a failure.
@@ -271,7 +296,10 @@ fn main() {
             }
         }
         let only_bad = titles.values().filter(|b| b.is_none()).count();
-        println!("{class}: {} titles, {only_bad} with only bad dumps", titles.len());
+        println!(
+            "{class}: {} titles, {only_bad} with only bad dumps",
+            titles.len()
+        );
         for (k, v) in ORDER.iter().enumerate() {
             let n = titles.values().filter(|b| **b == Some(k)).count();
             if n > 0 {

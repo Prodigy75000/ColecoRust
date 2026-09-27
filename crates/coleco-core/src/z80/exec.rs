@@ -12,7 +12,7 @@
 //! keeping the state definition and the several hundred lines of decode in
 //! separate files.
 
-use super::{flag, parity, sz53, sz53p, Bus, Index, Z80, A, B, C, L, MEM};
+use super::{flag, parity, sz53, sz53p, Bus, Index, A, B, C, L, MEM, Z80};
 
 impl Z80 {
     /// Execute one instruction, or take an interrupt. Returns T-states.
@@ -125,7 +125,11 @@ impl Z80 {
                     // is computed once and the *other* side keeps its plain
                     // register meaning under an index prefix.
                     let touches_mem = y == MEM || z == MEM;
-                    let mem = if touches_mem { self.mem_addr(bus, idx) } else { 0 };
+                    let mem = if touches_mem {
+                        self.mem_addr(bus, idx)
+                    } else {
+                        0
+                    };
                     let src_idx = if touches_mem { Index::Hl } else { idx };
                     let v = self.get_r(bus, z, if z == MEM { idx } else { src_idx }, mem);
                     self.set_r(bus, y, if y == MEM { idx } else { src_idx }, mem, v);
@@ -154,7 +158,15 @@ impl Z80 {
         self.q = self.f;
     }
 
-    fn exec_x0<Bs: Bus>(&mut self, bus: &mut Bs, y: usize, z: usize, p: usize, q: usize, idx: Index) {
+    fn exec_x0<Bs: Bus>(
+        &mut self,
+        bus: &mut Bs,
+        y: usize,
+        z: usize,
+        p: usize,
+        q: usize,
+        idx: Index,
+    ) {
         match z {
             0 => match y {
                 0 => {} // NOP
@@ -198,7 +210,11 @@ impl Z80 {
             2 => self.exec_x0_z2(bus, p, q, idx),
             3 => {
                 let v = self.get_rp(p, idx);
-                let nv = if q == 0 { v.wrapping_add(1) } else { v.wrapping_sub(1) };
+                let nv = if q == 0 {
+                    v.wrapping_add(1)
+                } else {
+                    v.wrapping_sub(1)
+                };
                 self.set_rp(p, idx, nv);
                 self.tick(2);
             }
@@ -215,7 +231,11 @@ impl Z80 {
                 // `LD r,n`. Under an index prefix the displacement comes
                 // *before* the immediate, which is the one place operand order
                 // in the instruction stream is not the order it reads.
-                let mem = if y == MEM { self.mem_addr_no_tick(bus, idx) } else { 0 };
+                let mem = if y == MEM {
+                    self.mem_addr_no_tick(bus, idx)
+                } else {
+                    0
+                };
                 let n = self.read_operand(bus);
                 if y == MEM && idx != Index::Hl {
                     self.tick(2);
@@ -282,7 +302,15 @@ impl Z80 {
         }
     }
 
-    fn exec_x3<Bs: Bus>(&mut self, bus: &mut Bs, y: usize, z: usize, p: usize, q: usize, idx: Index) {
+    fn exec_x3<Bs: Bus>(
+        &mut self,
+        bus: &mut Bs,
+        y: usize,
+        z: usize,
+        p: usize,
+        q: usize,
+        idx: Index,
+    ) {
         match z {
             0 => {
                 self.tick(1);
@@ -586,7 +614,11 @@ impl Z80 {
             2 => {
                 let a = self.hl();
                 let b = self.get_rp(p, Index::Hl);
-                let v = if q == 0 { self.sbc16(a, b) } else { self.adc16(a, b) };
+                let v = if q == 0 {
+                    self.sbc16(a, b)
+                } else {
+                    self.adc16(a, b)
+                };
                 self.set_hl(v);
             }
             3 => {
@@ -775,7 +807,11 @@ impl Z80 {
             sz53(b)
                 | if v & 0x80 != 0 { flag::N } else { 0 }
                 | if sum > 0xff { flag::H | flag::C } else { 0 }
-                | if parity(((sum & 7) as u8) ^ b) { flag::PV } else { 0 },
+                | if parity(((sum & 7) as u8) ^ b) {
+                    flag::PV
+                } else {
+                    0
+                },
         );
     }
 

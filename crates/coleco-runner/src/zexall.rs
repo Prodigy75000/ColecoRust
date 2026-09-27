@@ -112,7 +112,11 @@ impl Bus for SmsBus {
             0x8000..=0xbfff => {
                 if self.ram_control & 0x08 != 0 {
                     // Cartridge RAM paged into the third slot.
-                    let half = if self.ram_control & 0x04 != 0 { 0x4000 } else { 0 };
+                    let half = if self.ram_control & 0x04 != 0 {
+                        0x4000
+                    } else {
+                        0
+                    };
                     self.cart_ram[half + (a - 0x8000)]
                 } else {
                     self.rom_byte(self.banks[2], a - 0x8000)
@@ -128,7 +132,11 @@ impl Bus for SmsBus {
         match a {
             0x8000..=0xbfff => {
                 if self.ram_control & 0x08 != 0 {
-                    let half = if self.ram_control & 0x04 != 0 { 0x4000 } else { 0 };
+                    let half = if self.ram_control & 0x04 != 0 {
+                        0x4000
+                    } else {
+                        0
+                    };
                     self.cart_ram[half + (a - 0x8000)] = val;
                 }
             }
@@ -230,7 +238,10 @@ fn main() {
     while let Some(a) = args.next() {
         match a.as_str() {
             "--max-cycles" => {
-                max_cycles = args.next().and_then(|v| v.parse().ok()).unwrap_or(max_cycles)
+                max_cycles = args
+                    .next()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(max_cycles)
             }
             other => paths.push(other.to_string()),
         }
@@ -286,18 +297,33 @@ fn main() {
             // CPU is wedged or the harness is not being talked to.
             println!(
                 "  stopped at PC ${:04X}  AF {:02X}{:02X} BC {:04X} DE {:04X} HL {:04X} SP {:04X}",
-                cpu.pc, cpu.a(), cpu.f, cpu.bc(), cpu.de(), cpu.hl(), cpu.sp
+                cpu.pc,
+                cpu.a(),
+                cpu.f,
+                cpu.bc(),
+                cpu.de(),
+                cpu.hl(),
+                cpu.sp
             );
             println!(
                 "  banks {:?} ram_control ${:02X}  cart-ram printable {} bytes",
                 bus.banks,
                 bus.ram_control,
-                bus.cart_ram.iter().filter(|&&b| (0x20..0x7f).contains(&b)).count()
+                bus.cart_ram
+                    .iter()
+                    .filter(|&&b| (0x20..0x7f).contains(&b))
+                    .count()
             );
             let ascii: String = bus
                 .cart_ram
                 .iter()
-                .map(|&b| if (0x20..0x7f).contains(&b) { b as char } else { '.' })
+                .map(|&b| {
+                    if (0x20..0x7f).contains(&b) {
+                        b as char
+                    } else {
+                        '.'
+                    }
+                })
                 .collect();
             let trimmed = ascii.trim_matches('.');
             if !trimmed.is_empty() {
@@ -305,7 +331,11 @@ fn main() {
             }
         }
 
-        let text = if bus.output.is_empty() { bus.sram_text() } else { bus.output.clone() };
+        let text = if bus.output.is_empty() {
+            bus.sram_text()
+        } else {
+            bus.output.clone()
+        };
         let errors = tests_failed(&text);
         let oks = text.matches("OK").count();
         // Complete means every test has a verdict. "Tests complete" alone is
@@ -353,8 +383,10 @@ mod tests {
     #[test]
     fn the_rom_saying_it_is_done_ends_the_run_even_with_failures() {
         assert!(report_finished(FAILING_TAIL));
-        assert!(!report_finished("  daa OK
+        assert!(!report_finished(
+            "  daa OK
   neg OK
-"));
+"
+        ));
     }
 }

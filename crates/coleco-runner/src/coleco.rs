@@ -49,14 +49,23 @@ fn main() {
     while let Some(a) = args.next() {
         match a.as_str() {
             "--bios" => bios = Some(args.next().unwrap_or_else(|| usage())),
-            "--frames" => frames = args.next().and_then(|v| v.parse().ok()).unwrap_or_else(|| usage()),
+            "--frames" => {
+                frames = args
+                    .next()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or_else(|| usage())
+            }
             "--png" => png = Some(args.next().unwrap_or_else(|| usage())),
             "--until-cart" => until_cart = true,
             "--probe" => probe = true,
             "--state" => state = Some(args.next().unwrap_or_else(|| usage())),
             "--vram" => vram_out = Some(args.next().unwrap_or_else(|| usage())),
             "--key" => keys.push(parse_key(&args.next().unwrap_or_else(|| usage()))),
-            "--fire" => fires.push(args.next().and_then(|v| v.parse().ok()).unwrap_or_else(|| usage())),
+            "--fire" => fires.push(
+                args.next()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or_else(|| usage()),
+            ),
             "-h" | "--help" => usage(),
             _ if cart.is_none() => cart = Some(a),
             _ => usage(),
@@ -75,10 +84,13 @@ fn main() {
                 eprintln!("{p}: {e}");
                 std::process::exit(1)
             });
-            (BiosMode::Real, Coleco::bios_from_bytes(&b).unwrap_or_else(|e| {
-                eprintln!("{p}: {e:?}");
-                std::process::exit(1)
-            }))
+            (
+                BiosMode::Real,
+                Coleco::bios_from_bytes(&b).unwrap_or_else(|e| {
+                    eprintln!("{p}: {e:?}");
+                    std::process::exit(1)
+                }),
+            )
         }
     };
     let mut m = Coleco::new(firmware, &cart).unwrap_or_else(|e| {
@@ -108,9 +120,17 @@ fn main() {
         frames = 0;
     }
     for f in 0..frames {
-        let key = keys.iter().find(|&&(at, _)| f >= at && f < at + 10).map(|&(_, k)| k);
+        let key = keys
+            .iter()
+            .find(|&&(at, _)| f >= at && f < at + 10)
+            .map(|&(_, k)| k);
         let fire = fires.iter().any(|&at| f >= at && f < at + 10);
-        m.bus.pads[0] = Pad { key, fire_left: fire, fire_right: fire, ..Pad::default() };
+        m.bus.pads[0] = Pad {
+            key,
+            fire_left: fire,
+            fire_right: fire,
+            ..Pad::default()
+        };
         m.run_frame();
     }
     let audio = m.take_audio();
@@ -118,7 +138,10 @@ fn main() {
 
     println!("ColecoRust, save-state v{SAVE_STATE_VERSION}, {mode:?} BIOS");
     println!("  cart     {cart_path} ({} bytes)", cart.len());
-    println!("  frames   {frames} ({:.2} s emulated at {CPU_HZ} Hz)", frames as f64 * 262.0 * 228.0 / CPU_HZ as f64);
+    println!(
+        "  frames   {frames} ({:.2} s emulated at {CPU_HZ} Hz)",
+        frames as f64 * 262.0 * 228.0 / CPU_HZ as f64
+    );
     println!("  nmis     {}", m.nmis);
     println!(
         "  cpu      PC {:04X} SP {:04X} AF {:02X}{:02X} BC {:04X} DE {:04X} HL {:04X} IM {} IFF1 {}",
@@ -129,17 +152,34 @@ fn main() {
     if let Some(p) = &m.bus.probe {
         for (a, e) in &p.entries {
             let callers: Vec<String> = e.callers.iter().map(|c| format!("{c:04X}")).collect();
-            println!("  probe    entry {a:04X} x{} from {}", e.calls, callers.join(","));
+            println!(
+                "  probe    entry {a:04X} x{} from {}",
+                e.calls,
+                callers.join(",")
+            );
         }
-        let reads: Vec<String> = p.data_reads.iter().map(|(a, n)| format!("{a:04X}x{n}")).collect();
+        let reads: Vec<String> = p
+            .data_reads
+            .iter()
+            .map(|(a, n)| format!("{a:04X}x{n}"))
+            .collect();
         println!("  probe    BIOS data reads: {}", reads.join(" "));
     }
     if mode == BiosMode::Hle {
         let fmt = |m: &std::collections::BTreeMap<u16, u64>| {
-            m.iter().map(|(a, n)| format!("{a:04X}x{n}")).collect::<Vec<_>>().join(" ")
+            m.iter()
+                .map(|(a, n)| format!("{a:04X}x{n}"))
+                .collect::<Vec<_>>()
+                .join(" ")
         };
-        println!("  hle      unwritten routines called: {}", fmt(&m.hle_log.unimplemented));
-        println!("  hle      wild BIOS addresses reached: {}", fmt(&m.hle_log.wild));
+        println!(
+            "  hle      unwritten routines called: {}",
+            fmt(&m.hle_log.unimplemented)
+        );
+        println!(
+            "  hle      wild BIOS addresses reached: {}",
+            fmt(&m.hle_log.wild)
+        );
         for (a, from) in &m.hle_log.wild_from {
             println!("  hle      wild {a:04X} first reached from {from:04X}");
         }
@@ -150,7 +190,11 @@ fn main() {
         println!("  wrote    {out} (VRAM)");
     }
     if let Some(out) = png {
-        let rgb: Vec<u8> = m.framebuffer().iter().flat_map(|&p| [(p >> 16) as u8, (p >> 8) as u8, p as u8]).collect();
+        let rgb: Vec<u8> = m
+            .framebuffer()
+            .iter()
+            .flat_map(|&p| [(p >> 16) as u8, (p >> 8) as u8, p as u8])
+            .collect();
         if let Err(e) = write_png(&out, WIDTH as u32, HEIGHT as u32, &rgb) {
             eprintln!("{out}: {e}");
             std::process::exit(1);
@@ -166,7 +210,11 @@ fn parse_key(s: &str) -> (u32, u8) {
     let key = match k {
         "*" => 10,
         "#" => 11,
-        d => d.parse().ok().filter(|&n: &u8| n <= 9).unwrap_or_else(|| usage()),
+        d => d
+            .parse()
+            .ok()
+            .filter(|&n: &u8| n <= 9)
+            .unwrap_or_else(|| usage()),
     };
     (frame, key)
 }

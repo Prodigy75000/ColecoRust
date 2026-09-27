@@ -127,7 +127,8 @@ const KEYBOARD: [(c_uint, u8); 13] = [
 /// `strings -a libcolecorust_libretro.so | grep build=` names the commit a
 /// device's core was built from (see `build.rs`).
 #[used]
-static BUILD_STAMP: &[u8] = concat!("COLECORUST build=", env!("COLECORUST_BUILD_ID"), "\0").as_bytes();
+static BUILD_STAMP: &[u8] =
+    concat!("COLECORUST build=", env!("COLECORUST_BUILD_ID"), "\0").as_bytes();
 
 #[repr(C)]
 pub struct RetroSystemInfo {
@@ -292,7 +293,10 @@ pub unsafe extern "C" fn retro_get_system_av_info(info: *mut RetroSystemAvInfo) 
         max_height: HEIGHT as c_uint,
         aspect_ratio: 4.0 / 3.0,
     };
-    (*info).timing = RetroSystemTiming { fps: fps(), sample_rate: coleco_core::psg::SAMPLE_RATE as f64 };
+    (*info).timing = RetroSystemTiming {
+        fps: fps(),
+        sample_rate: coleco_core::psg::SAMPLE_RATE as f64,
+    };
 }
 
 #[no_mangle]
@@ -313,15 +317,23 @@ pub unsafe extern "C" fn retro_load_game(game: *const RetroGameInfo) -> bool {
         return false;
     }
     let rom = std::slice::from_raw_parts((*game).data as *const u8, (*game).size);
-    let Ok(machine) = Coleco::new(Firmware::Hle, rom) else { return false };
+    let Ok(machine) = Coleco::new(Firmware::Hle, rom) else {
+        return false;
+    };
 
     if let Some(env) = ENVIRON {
         let mut fmt = RETRO_PIXEL_FORMAT_XRGB8888;
-        if !env(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &mut fmt as *mut _ as *mut c_void) {
+        if !env(
+            RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,
+            &mut fmt as *mut _ as *mut c_void,
+        ) {
             return false;
         }
     }
-    CORE = Some(Core { machine: Box::new(machine), stereo: Vec::new() });
+    CORE = Some(Core {
+        machine: Box::new(machine),
+        stereo: Vec::new(),
+    });
     if let Some(env) = ENVIRON {
         set_input_descriptors(env);
         set_memory_maps(env);
@@ -351,7 +363,13 @@ unsafe fn set_input_descriptors(env: EnvironmentFn) {
             (JOY_SELECT, c"Keypad #"),
         ];
         for (id, name) in named {
-            d.push(RetroInputDescriptor { port, device: RETRO_DEVICE_JOYPAD, index: 0, id, description: name.as_ptr() });
+            d.push(RetroInputDescriptor {
+                port,
+                device: RETRO_DEVICE_JOYPAD,
+                index: 0,
+                id,
+                description: name.as_ptr(),
+            });
         }
         for (axis, name) in [(AXIS_Y, c"Keypad 9"), (AXIS_X, c"Keypad 0")] {
             d.push(RetroInputDescriptor {
@@ -363,8 +381,17 @@ unsafe fn set_input_descriptors(env: EnvironmentFn) {
             });
         }
     }
-    d.push(RetroInputDescriptor { port: 0, device: 0, index: 0, id: 0, description: std::ptr::null() });
-    env(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, d.as_mut_ptr() as *mut c_void);
+    d.push(RetroInputDescriptor {
+        port: 0,
+        device: 0,
+        index: 0,
+        id: 0,
+        description: std::ptr::null(),
+    });
+    env(
+        RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS,
+        d.as_mut_ptr() as *mut c_void,
+    );
 }
 
 /// The 1 KB of work RAM, where the CPU sees it (`$6000`, mirrored to
@@ -383,12 +410,22 @@ unsafe fn set_memory_maps(env: EnvironmentFn) {
         len: coleco_core::WORK_RAM,
         addrspace: std::ptr::null(),
     }];
-    let mut map = RetroMemoryMap { descriptors: desc.as_ptr(), num_descriptors: 1 };
-    env(RETRO_ENVIRONMENT_SET_MEMORY_MAPS, &mut map as *mut _ as *mut c_void);
+    let mut map = RetroMemoryMap {
+        descriptors: desc.as_ptr(),
+        num_descriptors: 1,
+    };
+    env(
+        RETRO_ENVIRONMENT_SET_MEMORY_MAPS,
+        &mut map as *mut _ as *mut c_void,
+    );
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn retro_load_game_special(_ty: c_uint, _info: *const RetroGameInfo, _num: usize) -> bool {
+pub unsafe extern "C" fn retro_load_game_special(
+    _ty: c_uint,
+    _info: *const RetroGameInfo,
+    _num: usize,
+) -> bool {
     false
 }
 
@@ -405,15 +442,23 @@ pub extern "C" fn retro_get_region() -> c_uint {
 /// One controller as the frontend reports it.
 unsafe fn read_pad(state: InputStateFn, port: c_uint) -> Pad {
     let held = |id| state(port, RETRO_DEVICE_JOYPAD, 0, id) != 0;
-    let mut key = KEYPAD_BUTTONS.iter().find(|&&(id, _)| held(id)).map(|&(_, k)| k);
+    let mut key = KEYPAD_BUTTONS
+        .iter()
+        .find(|&&(id, _)| held(id))
+        .map(|&(_, k)| k);
     if key.is_none() {
         key = KEYPAD_AXES
             .iter()
-            .find(|&&(axis, _)| state(port, RETRO_DEVICE_ANALOG, ANALOG_LEFT, axis) > ANALOG_PRESSED)
+            .find(|&&(axis, _)| {
+                state(port, RETRO_DEVICE_ANALOG, ANALOG_LEFT, axis) > ANALOG_PRESSED
+            })
             .map(|&(_, k)| k);
     }
     if port == 0 && key.is_none() {
-        key = KEYBOARD.iter().find(|&&(code, _)| state(0, RETRO_DEVICE_KEYBOARD, 0, code) != 0).map(|&(_, k)| k);
+        key = KEYBOARD
+            .iter()
+            .find(|&&(code, _)| state(0, RETRO_DEVICE_KEYBOARD, 0, code) != 0)
+            .map(|&(_, k)| k);
     }
     Pad {
         up: held(JOY_UP),
@@ -439,7 +484,12 @@ pub unsafe extern "C" fn retro_run() {
     }
     c.machine.run_frame();
     if let Some(video) = VIDEO {
-        video(c.machine.framebuffer().as_ptr() as *const c_void, WIDTH as c_uint, HEIGHT as c_uint, WIDTH * 4);
+        video(
+            c.machine.framebuffer().as_ptr() as *const c_void,
+            WIDTH as c_uint,
+            HEIGHT as c_uint,
+            WIDTH * 4,
+        );
     }
     // The chip is mono; the frontend takes stereo frames. A frame's worth
     // arrives even in silence (zeros), or a frontend starves its own timing.
@@ -478,7 +528,9 @@ pub unsafe extern "C" fn retro_unserialize(data: *const c_void, size: usize) -> 
         return false;
     }
     let len = c.machine.save_state().len().min(size);
-    c.machine.load_state(std::slice::from_raw_parts(data as *const u8, len)).is_ok()
+    c.machine
+        .load_state(std::slice::from_raw_parts(data as *const u8, len))
+        .is_ok()
 }
 
 // ---- memory interface ----
@@ -577,7 +629,12 @@ mod tests {
         retro_set_input_poll(poll);
         retro_set_input_state(input);
         let rom = cart();
-        let info = RetroGameInfo { path: std::ptr::null(), data: rom.as_ptr() as *const c_void, size: rom.len(), meta: std::ptr::null() };
+        let info = RetroGameInfo {
+            path: std::ptr::null(),
+            data: rom.as_ptr() as *const c_void,
+            size: rom.len(),
+            meta: std::ptr::null(),
+        };
         assert!(retro_load_game(&info), "loads with no BIOS anywhere");
     }
 
@@ -597,7 +654,10 @@ mod tests {
             assert_eq!(LAST_DIMS, (256, 192, 1024));
             // 60 frames at 59.92 fps is just over a second of 44.1 kHz.
             let expect = (44_100.0 * 60.0 / fps()) as usize;
-            assert!(AUDIO_FRAMES.abs_diff(expect) < 50, "{AUDIO_FRAMES} stereo frames against {expect}");
+            assert!(
+                AUDIO_FRAMES.abs_diff(expect) < 50,
+                "{AUDIO_FRAMES} stereo frames against {expect}"
+            );
             assert_eq!(retro_get_memory_size(RETRO_MEMORY_SYSTEM_RAM), 1024);
             retro_unload_game();
         }
@@ -613,28 +673,34 @@ mod tests {
         let _g = SERIAL.lock().unwrap();
         // (what the panel sends, key), from the Android agent's table.
         let panel: [(i32, u8); 12] = [
-            (1, 1),         // Y
-            (9, 2),         // X
-            (10, 3),        // L
-            (11, 4),        // R
-            (12, 5),        // L2
-            (13, 6),        // R2
-            (14, 7),        // L3
-            (15, 8),        // R3
-            (100 + 1, 9),   // left stick Y
-            (100, 0),       // left stick X
-            (3, 10),        // START is *
-            (2, 11),        // SELECT is #
+            (1, 1),       // Y
+            (9, 2),       // X
+            (10, 3),      // L
+            (11, 4),      // R
+            (12, 5),      // L2
+            (13, 6),      // R2
+            (14, 7),      // L3
+            (15, 8),      // R3
+            (100 + 1, 9), // left stick Y
+            (100, 0),     // left stick X
+            (3, 10),      // START is *
+            (2, 11),      // SELECT is #
         ];
         // The keypad's four-bit codes, active low, for keys 0-9, *, #.
-        let codes = [0x0a, 0x0d, 0x07, 0x0c, 0x02, 0x03, 0x0e, 0x05, 0x01, 0x0b, 0x09, 0x06];
+        let codes = [
+            0x0a, 0x0d, 0x07, 0x0c, 0x02, 0x03, 0x0e, 0x05, 0x01, 0x0b, 0x09, 0x06,
+        ];
         unsafe {
             load();
             let ram = retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM) as *const u8;
             for (sent, key) in panel {
                 HELD = sent;
                 retro_run();
-                assert_eq!(*ram & 0x0f, codes[key as usize], "panel input {sent} should be key {key}");
+                assert_eq!(
+                    *ram & 0x0f,
+                    codes[key as usize],
+                    "panel input {sent} should be key {key}"
+                );
             }
             HELD = -1;
             retro_run();

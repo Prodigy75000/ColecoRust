@@ -7,7 +7,7 @@
 //! that a gross decode error is found against six bytes of hand-written code
 //! rather than against a 64 KiB exerciser that prints nothing when it is stuck.
 
-use super::{flag, Bus, Z80, A, B, C, D, E, H, L};
+use super::{flag, Bus, A, B, C, D, E, H, L, Z80};
 
 /// Flat 64 KiB with a log of I/O, which is all a decode test needs.
 struct Flat {
@@ -20,7 +20,11 @@ impl Flat {
     fn new(code: &[u8]) -> Self {
         let mut mem = vec![0u8; 0x1_0000];
         mem[..code.len()].copy_from_slice(code);
-        Flat { mem, out: Vec::new(), input_value: 0 }
+        Flat {
+            mem,
+            out: Vec::new(),
+            input_value: 0,
+        }
     }
 }
 
@@ -102,7 +106,9 @@ fn sixteen_bit_pairs_and_stack() {
 #[test]
 fn shadow_registers_swap() {
     // LD A,$11 ; LD B,$22 ; EX AF,AF' ; EXX ; LD A,$33 ; LD B,$44 ; EX AF,AF' ; EXX
-    let code = [0x3e, 0x11, 0x06, 0x22, 0x08, 0xd9, 0x3e, 0x33, 0x06, 0x44, 0x08, 0xd9];
+    let code = [
+        0x3e, 0x11, 0x06, 0x22, 0x08, 0xd9, 0x3e, 0x33, 0x06, 0x44, 0x08, 0xd9,
+    ];
     let (cpu, _) = run(&code, 8);
     assert_eq!(cpu.a(), 0x11, "the first A came back");
     assert_eq!(cpu.reg(B), 0x22, "the first B came back");
@@ -123,7 +129,9 @@ fn djnz_counts_down_and_jr_takes_a_condition() {
 #[test]
 fn index_prefix_addresses_and_registers() {
     // LD IX,$8000 ; LD (IX+2),$AB ; LD A,(IX+2)
-    let code = [0xdd, 0x21, 0x00, 0x80, 0xdd, 0x36, 0x02, 0xab, 0xdd, 0x7e, 0x02];
+    let code = [
+        0xdd, 0x21, 0x00, 0x80, 0xdd, 0x36, 0x02, 0xab, 0xdd, 0x7e, 0x02,
+    ];
     let (cpu, bus) = run(&code, 3);
     assert_eq!(cpu.ix, 0x8000);
     assert_eq!(bus.mem[0x8002], 0xab);
@@ -244,7 +252,10 @@ fn interrupt_mode_1_vectors_and_ei_delays_one_instruction() {
     }
 
     // IM 1 ; EI ; NOP ; NOP
-    let mut bus = Irq { flat: Flat::new(&[0xed, 0x56, 0xfb, 0x00, 0x00]), raise: false };
+    let mut bus = Irq {
+        flat: Flat::new(&[0xed, 0x56, 0xfb, 0x00, 0x00]),
+        raise: false,
+    };
     let mut cpu = Z80::new();
     cpu.reset();
     cpu.sp = 0xf000;

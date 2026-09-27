@@ -84,7 +84,9 @@ pub struct Pad {
 /// itself. The first version, written from the commonly published table,
 /// had `*` and `#` the wrong way round: the BIOS decodes this `*` code to
 /// `$0A` and this `#` code to `$0B`, the values OS7 documents for them.
-const KEYPAD_CODES: [u8; 12] = [0x0a, 0x0d, 0x07, 0x0c, 0x02, 0x03, 0x0e, 0x05, 0x01, 0x0b, 0x09, 0x06];
+const KEYPAD_CODES: [u8; 12] = [
+    0x0a, 0x0d, 0x07, 0x0c, 0x02, 0x03, 0x0e, 0x05, 0x01, 0x0b, 0x09, 0x06,
+];
 
 impl Pad {
     /// The byte a read returns in joystick mode: directions in bits 0-3 and
@@ -286,8 +288,11 @@ impl Coleco {
 
     /// A BIOS image from a file's bytes.
     pub fn bios_from_bytes(b: &[u8]) -> Result<Firmware, MachineError> {
-        let arr: Box<[u8; BIOS_SIZE]> =
-            b.to_vec().into_boxed_slice().try_into().map_err(|_| MachineError::BadBiosSize(b.len()))?;
+        let arr: Box<[u8; BIOS_SIZE]> = b
+            .to_vec()
+            .into_boxed_slice()
+            .try_into()
+            .map_err(|_| MachineError::BadBiosSize(b.len()))?;
         Ok(Firmware::Real(arr))
     }
 
@@ -459,9 +464,16 @@ mod tests {
         let mut m = Coleco::new(Firmware::Hle, &cart).unwrap();
         m.step();
         assert_eq!(m.cpu.pc, 0x8050);
-        assert_eq!(m.bus.vdp.regs, [0x00, 0x80, 0x06, 0x80, 0x00, 0x36, 0x07, 0x00]);
+        assert_eq!(
+            m.bus.vdp.regs,
+            [0x00, 0x80, 0x06, 0x80, 0x00, 0x36, 0x07, 0x00]
+        );
         assert_eq!(m.bus.ram[0x3c4], 0x80, "the register 1 shadow");
-        assert_ne!(m.bus.vdp.vram[b'A' as usize * 8..b'A' as usize * 8 + 8], [0u8; 8], "font loaded");
+        assert_ne!(
+            m.bus.vdp.vram[b'A' as usize * 8..b'A' as usize * 8 + 8],
+            [0u8; 8],
+            "font loaded"
+        );
     }
 
     #[test]
@@ -521,9 +533,17 @@ mod tests {
     #[test]
     fn controller_mode_follows_the_last_strobe() {
         let mut m = machine_with(&[], 0);
-        m.bus.pads[0] = Pad { up: true, key: Some(1), ..Pad::default() };
+        m.bus.pads[0] = Pad {
+            up: true,
+            key: Some(1),
+            ..Pad::default()
+        };
         m.bus.output(0xc0, 0);
-        assert_eq!(m.bus.input(0xfc) & 0x0f, 0x0e, "joystick: up is bit 0, active low");
+        assert_eq!(
+            m.bus.input(0xfc) & 0x0f,
+            0x0e,
+            "joystick: up is bit 0, active low"
+        );
         m.bus.output(0x80, 0);
         assert_eq!(m.bus.input(0xfc) & 0x0f, KEYPAD_CODES[1]);
         assert_eq!(m.bus.input(0xff) & 0x0f, 0x0f, "port 2 has no key down");
@@ -573,7 +593,10 @@ mod tests {
         assert!(m.cycles() > 4096 * 41);
         let lines = m.cycles() / CYCLES_PER_LINE as u64;
         let frames_line = (lines % vdp::LINES_PER_FRAME as u64) as u16;
-        assert_eq!(m.bus.vdp.line, frames_line, "the VDP kept pace with the cycles");
+        assert_eq!(
+            m.bus.vdp.line, frames_line,
+            "the VDP kept pace with the cycles"
+        );
     }
 
     #[test]

@@ -76,7 +76,7 @@ pub(super) fn ram16(bus: &mut ColecoBus, addr: u16) -> u16 {
     u16::from_le_bytes([lo, hi])
 }
 
-fn set_ram16(bus: &mut ColecoBus, addr: u16, v: u16) {
+pub(super) fn set_ram16(bus: &mut ColecoBus, addr: u16, v: u16) {
     use crate::z80::Bus;
     let [lo, hi] = v.to_le_bytes();
     bus.write(addr, lo);
@@ -87,17 +87,20 @@ fn set_ram16(bus: &mut ColecoBus, addr: u16, v: u16) {
 /// 0 sprite attributes, 1 sprite patterns, 2 names, 3 patterns, 4 colours.
 const TABLE_BASES: u16 = 0x73f2;
 /// Graphics mode 2 is in force: register 0's shadow, bit 1.
-fn mode2(bus: &ColecoBus) -> bool {
+pub(super) fn mode2(bus: &ColecoBus) -> bool {
     bus.ram[0x3c3] & 0x02 != 0
 }
 
 /// Run the routine at `target`, if it is written. `None` when it is not
 /// written yet.
 pub fn call(target: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
-    use super::sound;
+    use super::{objects, sound};
     match target {
         0x025e => return Some(sound::play_it(cpu, bus)),
         0x027f => return Some(sound::sound_man(cpu, bus)),
+        // A mobile object, the one type not written, leaves these unwritten.
+        0x06d8 => return objects::putobj(cpu, bus).map(Flow::Ret),
+        0x0679 => return objects::writer(cpu, bus).map(Flow::Ret),
         _ => {}
     }
     Some(Flow::Ret(match target {
@@ -122,6 +125,8 @@ pub fn call(target: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
         0x118b => decoder(cpu, bus),
         0x11c1 => poller(cpu, bus),
         0x1979 => game_opt(cpu, bus),
+        0x04a3 => objects::activate(cpu, bus),
+        0x0664 => objects::init_writer(cpu, bus),
         _ => return None,
     }))
 }
@@ -171,7 +176,7 @@ fn block_flags(d_final: u8, carry: bool) -> u8 {
 
 /// WRITE_VRAM (`$1FDF`): copy BC bytes from HL in RAM to DE in VRAM, with
 /// the block count's quirk.
-fn write_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
+pub(super) fn write_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     use crate::z80::Bus;
     let (src, dst, count) = (cpu.hl(), cpu.de(), cpu.bc());
     let ctl = dst.wrapping_add(0x4000);
@@ -193,7 +198,7 @@ fn write_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
 }
 
 /// READ_VRAM (`$1FE2`): copy BC bytes from DE in VRAM to HL in RAM.
-fn read_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
+pub(super) fn read_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     use crate::z80::Bus;
     let (dst, src, count) = (cpu.hl(), cpu.de(), cpu.bc());
     bus.vdp.write_control(src as u8);
@@ -290,7 +295,7 @@ fn table_address(cpu: &mut Z80, bus: &mut ColecoBus) {
 }
 
 /// GET_VRAM (`$1FBB`): read IY items of table A from item DE into HL.
-fn get_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
+pub(super) fn get_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     table_address(cpu, bus);
     120 + read_vram(cpu, bus)
 }
@@ -298,7 +303,7 @@ fn get_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
 /// PUT_VRAM (`$1FBE`): write IY items of table A from HL at item DE. With
 /// sprite multiplexing on (`$73C7` = 1), sprite attributes go to the RAM
 /// copy the cartridge header points at (`$8002`) instead of VRAM.
-fn put_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
+pub(super) fn put_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     use crate::z80::Bus;
     if cpu.a() == 0 && bus.ram[0x3c7] == 1 {
         // The real one scales only the low bytes of index and count, by 4.
@@ -354,7 +359,13 @@ fn mode_1(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     c += write_register(cpu, bus);
     set_bc(cpu, 1, 0x80);
     c += write_register(cpu, bus);
-    for (code, addr) in [(2u8, 0x1800u16), (4, 0x2000), (3, 0x0000), (0, 0x1b00), (1, 0x3800)] {
+    for (code, addr) in [
+        (2u8, 0x1800u16),
+        (4, 0x2000),
+        (3, 0x0000),
+        (0, 0x1b00),
+        (1, 0x3800),
+    ] {
         cpu.set_a(code);
         cpu.set_hl(addr);
         c += init_table(cpu, bus);
@@ -418,7 +429,9 @@ fn wr_spr_nm_tbl(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
 /// What the keypad's inverted four-bit code means: key 0-9, `$0A` for `*`,
 /// `$0B` for `#`, `$0F` for none or an impossible code. Interface: this is
 /// the meaning of the hardware's codes, as the real BIOS decodes them.
-const KEYPAD: [u8; 16] = [0x0f, 0x06, 0x01, 0x03, 0x09, 0x00, 0x0a, 0x0f, 0x02, 0x0b, 0x07, 0x0f, 0x05, 0x04, 0x08, 0x0f];
+const KEYPAD: [u8; 16] = [
+    0x0f, 0x06, 0x01, 0x03, 0x09, 0x00, 0x0a, 0x0f, 0x02, 0x0b, 0x07, 0x0f, 0x05, 0x04, 0x08, 0x0f,
+];
 
 /// Read a controller port, inverted so a pressed input reads as a 1.
 fn read_pad(bus: &mut ColecoBus, player: u8) -> u8 {
@@ -461,7 +474,11 @@ fn update_spinner(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
         cpu.set_a(raw);
         if raw & 0x10 == 0 {
             let v = bus.peek(addr);
-            let next = if raw & 0x20 == 0 { v.wrapping_sub(1) } else { v.wrapping_add(1) };
+            let next = if raw & 0x20 == 0 {
+                v.wrapping_sub(1)
+            } else {
+                v.wrapping_add(1)
+            };
             bus.write(addr, next);
             // INC/DEC (HL): S, Z, H, V, N from the result, carry kept.
             let dec = raw & 0x20 == 0;
@@ -524,7 +541,7 @@ pub(super) fn and_flags(result: u8) -> u8 {
 /// Flags as `BIT n,r` leaves them for a register: Z and V set when the bit
 /// is clear, S when bit 7 is tested and set, H set, bits 5 and 3 from the
 /// register, carry kept.
-fn bit_flags(f: u8, n: u32, r: u8) -> u8 {
+pub(super) fn bit_flags(f: u8, n: u32, r: u8) -> u8 {
     let set = r & (1 << n) != 0;
     (f & 0x01)
         | 0x10
@@ -539,7 +556,11 @@ fn add16_flags(f: u8, a: u16, b: u16) -> u8 {
     let r = a.wrapping_add(b);
     (f & 0xc4)
         | ((r >> 8) as u8 & 0x28)
-        | if (a & 0x0fff) + (b & 0x0fff) > 0x0fff { 0x10 } else { 0 }
+        | if (a & 0x0fff) + (b & 0x0fff) > 0x0fff {
+            0x10
+        } else {
+            0
+        }
         | u8::from(a as u32 + b as u32 > 0xffff)
 }
 
@@ -754,7 +775,10 @@ fn game_opt(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
         c += put_names(cpu, bus, OPT_DIGITS + i as u16, row, 1);
     }
     // The skill number, column 15: 2-4 on both groups' later rows.
-    for (i, cell) in [0x10f, 0x14f, 0x18f, 0x22f, 0x26f, 0x2af].into_iter().enumerate() {
+    for (i, cell) in [0x10f, 0x14f, 0x18f, 0x22f, 0x26f, 0x2af]
+        .into_iter()
+        .enumerate()
+    {
         c += put_names(cpu, bus, OPT_DIGITS + (i % 3) as u16, cell, 1);
     }
     // TWO over ONE, and PLAYERS, on the two-player rows.
@@ -845,14 +869,28 @@ mod tests {
             for f in [0x00u8, 0x01, 0xff] {
                 for n in 0..8u32 {
                     let op = 0x40 | (n as u8) << 3; // BIT n,B
-                    assert_eq!(bit_flags(f, n, v), z80_flags(&[0xcb, op], 0, f, v, 0), "BIT {n},{v:02X}");
+                    assert_eq!(
+                        bit_flags(f, n, v),
+                        z80_flags(&[0xcb, op], 0, f, v, 0),
+                        "BIT {n},{v:02X}"
+                    );
                 }
             }
             for k in [0u8, 1, 0x0f, 0x40, 0x7f, 0x80, 0xff, v] {
-                assert_eq!(and_flags(v & k), z80_flags(&[0xe6, k], v, 0xff, 0, 0), "AND {k:02X}");
+                assert_eq!(
+                    and_flags(v & k),
+                    z80_flags(&[0xe6, k], v, 0xff, 0, 0),
+                    "AND {k:02X}"
+                );
             }
         }
-        for (x, y) in [(0x7000u16, 2u16), (0x70fe, 7), (0x0ffe, 2), (0xfffe, 7), (0x10f5, 0x0e)] {
+        for (x, y) in [
+            (0x7000u16, 2u16),
+            (0x70fe, 7),
+            (0x0ffe, 2),
+            (0xfffe, 7),
+            (0x10f5, 0x0e),
+        ] {
             for f in [0x00u8, 0xff] {
                 // ADD IX,DE with DE = y
                 let code = [0x11, y as u8, (y >> 8) as u8, 0xdd, 0x19];
@@ -895,7 +933,11 @@ mod tests {
         assert_eq!(block_count(0x0105), (5, 0x00), "256 fewer than asked");
         assert_eq!(block_count(0x0205), (261, 0x00));
         assert_eq!(block_count(0x8060), (0x60 + 256 * 0x7f, 0x00));
-        assert_eq!(block_count(0xfe60), (0x60, 0xfd), "D past $80 goes negative at once");
+        assert_eq!(
+            block_count(0xfe60),
+            (0x60, 0xfd),
+            "D past $80 goes negative at once"
+        );
     }
 
     /// The flags DEC D leaves, checked against the Z80 core's own DEC D.
@@ -924,7 +966,11 @@ mod tests {
                 cpu.set_de(u16::from(before) << 8);
                 cpu.f = u8::from(carry);
                 cpu.step(&mut bus);
-                assert_eq!(block_flags(before.wrapping_sub(1), carry), cpu.f, "DEC D from {before:02X}");
+                assert_eq!(
+                    block_flags(before.wrapping_sub(1), carry),
+                    cpu.f,
+                    "DEC D from {before:02X}"
+                );
             }
         }
     }

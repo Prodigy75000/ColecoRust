@@ -112,7 +112,10 @@ fn pops_stack(op: [u8; 2]) -> bool {
 
 impl Probe {
     pub fn new() -> Self {
-        Probe { last_writer: vec![Writer::Nobody; WORK_RAM], ..Probe::default() }
+        Probe {
+            last_writer: vec![Writer::Nobody; WORK_RAM],
+            ..Probe::default()
+        }
     }
 
     /// Called before each instruction. `op` is its first two bytes, `nmi`
@@ -126,7 +129,11 @@ impl Probe {
             self.nmi_resume.pop();
         }
         if self.started && in_bios(pc) && !in_bios(self.prev_pc) && !nmi && !interrupt_return {
-            let map = if is_return(self.prev_op) { &mut self.returns_into } else { &mut self.entries };
+            let map = if is_return(self.prev_op) {
+                &mut self.returns_into
+            } else {
+                &mut self.entries
+            };
             let e = map.entry(pc).or_default();
             e.calls += 1;
             if e.callers.len() < 8 && !e.callers.contains(&self.prev_pc) {
@@ -205,7 +212,11 @@ mod tests {
         assert_eq!(p.entries.len(), 1);
         assert_eq!(p.entries[&0x1f61].calls, 1);
         assert_eq!(p.entries[&0x1f61].callers, vec![0x8100]);
-        assert_eq!(p.returns_into[&0x0500].callers, vec![0x8200], "the return is kept apart");
+        assert_eq!(
+            p.returns_into[&0x0500].callers,
+            vec![0x8200],
+            "the return is kept apart"
+        );
     }
 
     /// The cartridge's NMI handler resuming BIOS code it interrupted is

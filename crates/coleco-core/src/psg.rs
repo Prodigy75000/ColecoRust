@@ -105,7 +105,10 @@ impl Default for Psg {
 
 impl Psg {
     pub fn new() -> Self {
-        let silent = Tone { attenuation: 15, ..Tone::default() };
+        let silent = Tone {
+            attenuation: 15,
+            ..Tone::default()
+        };
         Psg {
             tone: [silent; 3],
             noise_ctrl: 0,
@@ -288,7 +291,14 @@ impl Default for Audio {
 
 impl Audio {
     pub fn new() -> Self {
-        Audio { psg: Psg::new(), step_accum: 0, sample_accum: 0, sum: 0, count: 0, out: Vec::new() }
+        Audio {
+            psg: Psg::new(),
+            step_accum: 0,
+            sample_accum: 0,
+            sum: 0,
+            count: 0,
+            out: Vec::new(),
+        }
     }
 
     /// Advance by `cycles` CPU clocks.
@@ -421,7 +431,10 @@ mod tests {
             produced += a.out.len() as u64;
             a.out.clear();
             let want = second * SAMPLE_RATE as u64;
-            assert!(want.abs_diff(produced) <= 1,"after {second} s: {produced} against {want}");
+            assert!(
+                want.abs_diff(produced) <= 1,
+                "after {second} s: {produced} against {want}"
+            );
         }
     }
 

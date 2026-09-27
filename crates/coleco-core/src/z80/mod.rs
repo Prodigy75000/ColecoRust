@@ -363,10 +363,12 @@ impl Z80 {
         let half = (a & 0x0f) + (v & 0x0f) + c as u8 > 0x0f;
         // Overflow: both operands agree in sign and the result disagrees.
         let ovf = (a ^ res) & (v ^ res) & 0x80 != 0;
-        self.set_flags(sz53(res)
-            | if half { flag::H } else { 0 }
-            | if ovf { flag::PV } else { 0 }
-            | if res16 > 0xff { flag::C } else { 0 });
+        self.set_flags(
+            sz53(res)
+                | if half { flag::H } else { 0 }
+                | if ovf { flag::PV } else { 0 }
+                | if res16 > 0xff { flag::C } else { 0 },
+        );
         self.r[A] = res;
     }
 
@@ -377,11 +379,13 @@ impl Z80 {
         let res = res16 as u8;
         let half = ((a & 0x0f) as i16 - (v & 0x0f) as i16 - c as i16) < 0;
         let ovf = (a ^ v) & (a ^ res) & 0x80 != 0;
-        self.set_flags(sz53(res)
-            | flag::N
-            | if half { flag::H } else { 0 }
-            | if ovf { flag::PV } else { 0 }
-            | if res16 > 0xff { flag::C } else { 0 });
+        self.set_flags(
+            sz53(res)
+                | flag::N
+                | if half { flag::H } else { 0 }
+                | if ovf { flag::PV } else { 0 }
+                | if res16 > 0xff { flag::C } else { 0 },
+        );
         if store {
             self.r[A] = res;
         } else {
@@ -408,20 +412,24 @@ impl Z80 {
 
     fn inc8(&mut self, v: u8) -> u8 {
         let res = v.wrapping_add(1);
-        self.set_flags((self.f & flag::C)
-            | sz53(res)
-            | if v & 0x0f == 0x0f { flag::H } else { 0 }
-            | if res == 0x80 { flag::PV } else { 0 });
+        self.set_flags(
+            (self.f & flag::C)
+                | sz53(res)
+                | if v & 0x0f == 0x0f { flag::H } else { 0 }
+                | if res == 0x80 { flag::PV } else { 0 },
+        );
         res
     }
 
     fn dec8(&mut self, v: u8) -> u8 {
         let res = v.wrapping_sub(1);
-        self.set_flags((self.f & flag::C)
-            | flag::N
-            | sz53(res)
-            | if v & 0x0f == 0 { flag::H } else { 0 }
-            | if res == 0x7f { flag::PV } else { 0 });
+        self.set_flags(
+            (self.f & flag::C)
+                | flag::N
+                | sz53(res)
+                | if v & 0x0f == 0 { flag::H } else { 0 }
+                | if res == 0x7f { flag::PV } else { 0 },
+        );
         res
     }
 
@@ -429,10 +437,16 @@ impl Z80 {
         let res = a.wrapping_add(b);
         self.memptr = a.wrapping_add(1);
         let half = (a & 0x0fff) + (b & 0x0fff) > 0x0fff;
-        self.set_flags((self.f & (flag::S | flag::Z | flag::PV))
-            | (((res >> 8) as u8) & flag::XY)
-            | if half { flag::H } else { 0 }
-            | if (a as u32 + b as u32) > 0xffff { flag::C } else { 0 });
+        self.set_flags(
+            (self.f & (flag::S | flag::Z | flag::PV))
+                | (((res >> 8) as u8) & flag::XY)
+                | if half { flag::H } else { 0 }
+                | if (a as u32 + b as u32) > 0xffff {
+                    flag::C
+                } else {
+                    0
+                },
+        );
         self.tick(7);
         res
     }
@@ -444,11 +458,13 @@ impl Z80 {
         self.memptr = a.wrapping_add(1);
         let half = (a & 0x0fff) as u32 + (b & 0x0fff) as u32 + c > 0x0fff;
         let ovf = (a ^ res) & (b ^ res) & 0x8000 != 0;
-        self.set_flags((((res >> 8) as u8) & (flag::S | flag::XY))
-            | if res == 0 { flag::Z } else { 0 }
-            | if half { flag::H } else { 0 }
-            | if ovf { flag::PV } else { 0 }
-            | if full > 0xffff { flag::C } else { 0 });
+        self.set_flags(
+            (((res >> 8) as u8) & (flag::S | flag::XY))
+                | if res == 0 { flag::Z } else { 0 }
+                | if half { flag::H } else { 0 }
+                | if ovf { flag::PV } else { 0 }
+                | if full > 0xffff { flag::C } else { 0 },
+        );
         self.tick(7);
         res
     }
@@ -460,12 +476,14 @@ impl Z80 {
         self.memptr = a.wrapping_add(1);
         let half = ((a & 0x0fff) as i32 - (b & 0x0fff) as i32 - c as i32) < 0;
         let ovf = (a ^ b) & (a ^ res) & 0x8000 != 0;
-        self.set_flags((((res >> 8) as u8) & (flag::S | flag::XY))
-            | flag::N
-            | if res == 0 { flag::Z } else { 0 }
-            | if half { flag::H } else { 0 }
-            | if ovf { flag::PV } else { 0 }
-            | if full > 0xffff { flag::C } else { 0 });
+        self.set_flags(
+            (((res >> 8) as u8) & (flag::S | flag::XY))
+                | flag::N
+                | if res == 0 { flag::Z } else { 0 }
+                | if half { flag::H } else { 0 }
+                | if ovf { flag::PV } else { 0 }
+                | if full > 0xffff { flag::C } else { 0 },
+        );
         self.tick(7);
         res
     }
@@ -493,10 +511,12 @@ impl Z80 {
         } else {
             (a & 0x0f) > 9
         };
-        self.set_flags(sz53p(res)
-            | (self.f & flag::N)
-            | if half { flag::H } else { 0 }
-            | if carry { flag::C } else { 0 });
+        self.set_flags(
+            sz53p(res)
+                | (self.f & flag::N)
+                | if half { flag::H } else { 0 }
+                | if carry { flag::C } else { 0 },
+        );
         self.r[A] = res;
     }
 
@@ -566,21 +586,27 @@ impl Z80 {
         let v = self.r[A];
         let old = self.f & flag::C;
         self.r[A] = (v << 1) | old;
-        self.set_flags((self.f & (flag::S | flag::Z | flag::PV)) | (self.r[A] & flag::XY) | (v >> 7));
+        self.set_flags(
+            (self.f & (flag::S | flag::Z | flag::PV)) | (self.r[A] & flag::XY) | (v >> 7),
+        );
     }
     fn rra(&mut self) {
         let v = self.r[A];
         let old = self.f & flag::C;
         self.r[A] = (v >> 1) | (old << 7);
-        self.set_flags((self.f & (flag::S | flag::Z | flag::PV)) | (self.r[A] & flag::XY) | (v & 1));
+        self.set_flags(
+            (self.f & (flag::S | flag::Z | flag::PV)) | (self.r[A] & flag::XY) | (v & 1),
+        );
     }
 
     fn cpl(&mut self) {
         self.r[A] = !self.r[A];
-        self.set_flags((self.f & (flag::S | flag::Z | flag::PV | flag::C))
-            | flag::H
-            | flag::N
-            | (self.r[A] & flag::XY));
+        self.set_flags(
+            (self.f & (flag::S | flag::Z | flag::PV | flag::C))
+                | flag::H
+                | flag::N
+                | (self.r[A] & flag::XY),
+        );
     }
 
     /// SCF and CCF take their undocumented bits from `A` OR'd with the previous
@@ -596,7 +622,6 @@ impl Z80 {
             self.f |= flag::C;
         }
     }
-
 
     // ---- small accessors the decode leans on ----
 
