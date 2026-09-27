@@ -766,6 +766,48 @@ fn mobile(cpu: &mut Z80, bus: &mut ColecoBus, desc: u16, gfx: u16, param: u8) ->
     c + draw_cells(cpu, bus, at(0x13), row, col, 3, 3)
 }
 
+/// `$07E8` called directly: DE, a pixel coordinate, shifted to a cell and
+/// clamped into E; D is left shifted, HL kept. The flags are those of the
+/// ADD HL,DE that tests the range, over BIT 7,D and the last RR E.
+pub fn clamp_entry(cpu: &mut Z80) -> i32 {
+    let de = ((cpu.de() as i16) >> 3) as u16;
+    let [d, e] = de.to_be_bytes();
+    // The last RR E shifted out bit 2 of the original E.
+    let rr = sz53p(e) | ((cpu.de() >> 2) & 1) as u8;
+    let f = bit_flags(rr, 7, d);
+    let bound: u16 = if d & 0x80 == 0 { 0xff80 } else { 0x0080 };
+    cpu.f = super::routines::add16_flags(f, bound, de);
+    cpu.set_de(u16::from_be_bytes([d, cell(cpu.de())]));
+    100
+}
+
+/// `$08C0` called directly: signed row D and column E as a name-table
+/// offset in DE, HL kept. Flags from its last ADD HL,DE over BIT 7,E.
+pub fn offset_entry(cpu: &mut Z80) -> i32 {
+    let [row, col] = cpu.de().to_be_bytes();
+    let rows = ((row as i8 as i16) * 32) as u16;
+    let mut f = bit_flags(cpu.f, 7, row);
+    // Five ADD HL,HL: the carry of the last is what BIT 7,E keeps.
+    let mut hl = (row as i8 as i16) as u16;
+    for _ in 0..5 {
+        f = super::routines::add16_flags(f, hl, hl);
+        hl = hl.wrapping_add(hl);
+    }
+    f = bit_flags(f, 7, col);
+    let de = (col as i8 as i16) as u16;
+    cpu.f = super::routines::add16_flags(f, rows, de);
+    cpu.set_de(cell_offset(row, col));
+    120
+}
+
+/// `$080B` called directly: HL names, D row, E column, C width, B height.
+pub fn draw_entry(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
+    let [row, col] = cpu.de().to_be_bytes();
+    let [h, w] = cpu.bc().to_be_bytes();
+    let src = cpu.hl();
+    draw_cells(cpu, bus, src, row, col, w, h)
+}
+
 /// A cell position as a name-table offset: row times 32 plus column, both
 /// signed.
 fn cell_offset(row: u8, col: u8) -> u16 {
@@ -819,7 +861,8 @@ fn draw_cells(cpu: &mut Z80, bus: &mut ColecoBus, src: u16, row: u8, col: u8, w:
         src = src.wrapping_add(w as u16);
         offset = offset.wrapping_add(0x20);
         r = r.wrapping_add(1);
-        c += 60;
+        // Per row, the real loop's EXX dance and pushes around PUT_VRAM.
+        c += 400;
         if r == h {
             cpu.set_a(h);
             cpu.f = cp_flags(h, h);

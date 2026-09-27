@@ -281,11 +281,15 @@ fn main() {
         eprintln!("usage: routinediff --bios PATH --routine SLOT_HEX|all [--title TEXT] [--show KIND] CARTDIR");
         std::process::exit(2);
     };
+    // The jump table, and the addresses games call directly inside the BIOS
+    // (compared as a routine whose slot is its own address).
+    let known: Vec<(u16, u16)> =
+        TABLE.iter().copied().chain(coleco_core::hle::routines::ENTRY_POINTS.iter().map(|&a| (a, a))).collect();
     let routines: Vec<(u16, u16)> = if routine == "all" {
-        TABLE.to_vec()
+        known
     } else {
         let wanted = u16::from_str_radix(&routine, 16).unwrap_or(0);
-        let pair = TABLE.iter().copied().find(|&(s, t)| s == wanted || t == wanted).unwrap_or_else(|| {
+        let pair = known.iter().copied().find(|&(s, t)| s == wanted || t == wanted).unwrap_or_else(|| {
             eprintln!("{routine} is not a jump-table slot or routine");
             std::process::exit(2)
         });

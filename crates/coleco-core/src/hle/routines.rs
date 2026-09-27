@@ -93,9 +93,24 @@ pub(super) fn mode2(bus: &ColecoBus) -> bool {
 
 /// Run the routine at `target`, if it is written. `None` when it is not
 /// written yet.
+/// Addresses inside the BIOS that games call directly, though no jump-table
+/// slot leads there: helpers of the real routines, or a routine's second
+/// half. Found by the smoke's wild-address log.
+///
+/// | address | what | called by |
+/// |---|---|---|
+/// | `$07E8` | a pixel coordinate DE to a clamped cell E | Linking Logic |
+/// | `$080B` | draw a block of names, clipped | Aquattack, Omega Race, Tunnels & Trolls |
+/// | `$08C0` | a signed cell D, E to a name-table offset DE | Linking Logic |
+/// | `$196B` | the title screen's delay: HL passes of 255 | Aquattack, Dr. Seuss |
+/// | `$1987` | GAME_OPT after its clear and MODE_1 | The Yolk's on You |
+/// | `$1C4F` | PUT_VRAM without its sprite-table check | Aquattack |
+pub const ENTRY_POINTS: [u16; 6] = [0x07e8, 0x080b, 0x08c0, 0x196b, 0x1987, 0x1c4f];
+
 pub fn call(target: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
     use super::{objects, sound, timers};
     match target {
+        0x196b => return Some(delay(cpu, bus)),
         0x025e => return Some(sound::play_it(cpu, bus)),
         0x027f => return Some(sound::sound_man(cpu, bus)),
         0x18d4 => return Some(fill_vram(cpu, bus)),
@@ -135,6 +150,14 @@ pub fn call(target: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
         0x1053 => timers::request_signal(cpu, bus),
         0x10cb => timers::test_signal(cpu, bus),
         0x0fc4 => timers::free_signal(cpu, bus),
+        0x07e8 => objects::clamp_entry(cpu),
+        0x080b => objects::draw_entry(cpu, bus),
+        0x08c0 => objects::offset_entry(cpu),
+        0x1987 => game_opt_text(cpu, bus),
+        0x1c4f => {
+            table_address(cpu, bus);
+            120 + write_vram(cpu, bus)
+        }
         _ => return None,
     }))
 }
@@ -789,12 +812,17 @@ fn put_names(cpu: &mut Z80, bus: &mut ColecoBus, src: u16, cell: u16, count: u16
 /// plural "S" into place, colours everything white on dark blue and turns
 /// the display on. The same calls, in the same order, here.
 fn game_opt(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
-    let mut c = 0;
     cpu.set_hl(0);
     cpu.set_de(0x4000);
     cpu.set_a(0);
-    c += fill_vram_within(cpu, bus);
-    c += mode_1(cpu, bus);
+    let c = fill_vram_within(cpu, bus) + mode_1(cpu, bus);
+    c + game_opt_text(cpu, bus)
+}
+
+/// GAME_OPT from its backdrop colour on (`$1987`): everything but the clear
+/// and MODE_1, which a game entering here has done its own way.
+fn game_opt_text(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
+    let mut c = 0;
     set_bc(cpu, 15, 4);
     c += write_register(cpu, bus);
     c += load_ascii(cpu, bus);
@@ -826,6 +854,29 @@ fn game_opt(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     c += fill_vram_within(cpu, bus);
     set_bc(cpu, 1, 0xc0);
     c + write_register(cpu, bus)
+}
+
+/// One outer pass of the BIOS's delay loop, cycles: LD DE,$FF and 255 turns
+/// of DEC DE; LD A,D; OR E; JR NZ, then DEC HL; LD A,H; OR L; JR NZ.
+const DELAY_PASS: i32 = 10 + 255 * 26 - 5 + 26;
+
+/// The title screen's delay (`$196B`): HL passes of a 255-count loop (65536
+/// when HL is 0), about 1.9 ms each. It can run for seconds, and NMIs come
+/// and go through it on the real machine, so it runs one pass per step and
+/// comes back to its own address until HL is spent: an NMI between passes
+/// returns here, as it would to the real loop.
+fn delay(cpu: &mut Z80, bus: &mut ColecoBus) -> Flow {
+    let _ = bus;
+    let hl = cpu.hl().wrapping_sub(1);
+    cpu.set_hl(hl);
+    cpu.set_de(0);
+    cpu.set_a((hl >> 8) as u8 | hl as u8);
+    if hl != 0 {
+        return Flow::Jump(DELAY_PASS);
+    }
+    // The loop ends on OR L with HL at zero, which clears carry too.
+    cpu.f = sz53p(0);
+    Flow::Ret(DELAY_PASS - 5)
 }
 
 /// RAND_GEN (`$1FFD`): a 16-bit shift register at `$73C8`, fed back from

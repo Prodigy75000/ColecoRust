@@ -196,7 +196,9 @@ pub fn trap(cpu: &mut Z80, bus: &mut ColecoBus, log: &mut HleLog) -> Option<i32>
     let resumed = sound::resume(pc, cpu, bus).or_else(|| routines::resume(pc, cpu, bus));
     let flow = match resumed {
         Some(flow) => Some(flow),
-        None if TABLE.iter().any(|&(_, t)| t == pc) => routines::call(pc, cpu, bus),
+        None if TABLE.iter().any(|&(_, t)| t == pc) || routines::ENTRY_POINTS.contains(&pc) => {
+            routines::call(pc, cpu, bus)
+        }
         None => None,
     };
     match flow {
