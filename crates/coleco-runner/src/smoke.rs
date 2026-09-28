@@ -26,6 +26,12 @@
 //! | `CRASHED` | ended executing open bus, or halted with no interrupt that could wake it |
 //! | `BLANK` | display off, or one colour on screen, at the end, AND no change over the last 100 frames |
 //! | `STATIC` | picture unchanged over the last 100 frames and no sound |
+//!
+//! "Unchanged over the last 100 frames" means no frame in them differs from
+//! the one before it. Comparing only the frames 100 apart, as the first
+//! version did, read an animation whose cycle lands back on the same picture
+//! as still: Mountain King's twinkle flipped between ALIVE and STATIC with
+//! nothing but timing changed.
 //! | `ALIVE` | none of the above |
 //!
 //! `ALIVE` is a candidate, not a verdict on playability: a headless run cannot
@@ -44,6 +50,16 @@ mod png;
 mod corpus;
 
 const STILL_WINDOW: u32 = 100;
+
+/// A frame's fingerprint: FNV-1a over its pixels.
+fn fingerprint(frame: &[u32]) -> u64 {
+    frame.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, &p| (h ^ p as u64).wrapping_mul(0x0100_0000_01b3))
+}
+
+/// Whether the picture changed at any step in a run of frames' fingerprints.
+fn changed(prints: &[u64]) -> bool {
+    prints.windows(2).any(|w| w[0] != w[1])
+}
 /// Thumbnails on a contact sheet, eight across.
 const SHEET: usize = 48;
 
@@ -99,7 +115,8 @@ fn run_one(bios: Option<&[u8]>, path: &Path, root: &Path) -> Row {
     };
     let Ok(mut m) = Coleco::new(firmware, &cart) else { return row };
 
-    let mut before_still: Vec<u32> = Vec::new();
+    // The last STILL_WINDOW frames, and the one before them.
+    let mut prints: Vec<u64> = Vec::new();
     for f in 0..FRAMES {
         m.bus.pads = corpus::pads_at(f);
         m.run_frame();
@@ -111,13 +128,13 @@ fn run_one(bios: Option<&[u8]>, path: &Path, root: &Path) -> Row {
             let p = audio.iter().map(|s| s.unsigned_abs()).max().unwrap_or(0);
             row.peak = row.peak.max(p);
         }
-        if f == FRAMES - STILL_WINDOW {
-            before_still = m.framebuffer().to_vec();
+        if f >= FRAMES - STILL_WINDOW - 1 {
+            prints.push(fingerprint(m.framebuffer()));
         }
     }
 
     row.frame = m.framebuffer().to_vec();
-    row.moving = before_still != row.frame;
+    row.moving = changed(&prints);
     let mut seen: Vec<u32> = row.frame.clone();
     seen.sort_unstable();
     seen.dedup();
@@ -280,4 +297,32 @@ fn main() {
         }
     }
     println!("ledger: {out}/smoke.tsv, contact sheets: {out}/sheet-NN.png");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A twinkle with a 50-frame cycle is the same picture 100 frames apart
+    /// and still moving; a picture that changes once and settles is moving
+    /// too; one that never changes is not. The first case is the one the
+    /// two-frame comparison got wrong.
+    #[test]
+    fn moving_means_any_change_between_frames() {
+        let twinkle: Vec<u64> = (0..=100).map(|f| if f % 50 < 25 { 1 } else { 2 }).collect();
+        assert_eq!(twinkle.first(), twinkle.last(), "the same picture 100 frames apart");
+        assert!(changed(&twinkle));
+        let settles: Vec<u64> = (0..=100).map(|f| if f < 3 { 1 } else { 2 }).collect();
+        assert!(changed(&settles));
+        assert!(!changed(&[7; 101]));
+    }
+
+    #[test]
+    fn fingerprints_tell_pictures_apart() {
+        let a = vec![0xff00_0000u32; 16];
+        let mut b = a.clone();
+        b[9] = 0xff00_0001;
+        assert_ne!(fingerprint(&a), fingerprint(&b));
+        assert_eq!(fingerprint(&a), fingerprint(&a.clone()));
+    }
 }

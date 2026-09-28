@@ -1,7 +1,7 @@
 n	verdict	class	dump	title	file	crc32	size	header	first_cart_frame	nmis	colours	moving	peak	end_pc	hle_unimplemented	hle_wild	hle_addresses
 0	ALIVE	commercial	good	2010 - The Graphic Action Game	ColecoVision/2010 - The Graphic Action Game (1984) (Coleco).col	c575a831	32768	title	0	1448	15	true	8191	82ee	0	0	
 1	ALIVE	commercial	good	Adam's Musicbox Demo	ColecoVision/Adam's Musicbox Demo (1987) (Coleco).col	164c8c26	24576	title	0	1488	2	false	11674	87a4	0	0	
-2	ALIVE	commercial	good	Alcazar - The Forgotten Fortress	ColecoVision/Alcazar - The Forgotten Fortress (1985) (Activision).col	9cc3fabc	16384	skip	0	1454	8	false	3261	971d	0	0	
+2	ALIVE	commercial	good	Alcazar - The Forgotten Fortress	ColecoVision/Alcazar - The Forgotten Fortress (1985) (Activision).col	9cc3fabc	16384	skip	0	1454	8	true	3261	971d	0	0	
 3	ALIVE	commercial	good	Alphabet Zoo	ColecoVision/Alphabet Zoo (1984) (Spinnaker).col	4ffb4e8c	16384	skip	0	1463	8	true	8191	95ac	0	0	
 4	ALIVE	commercial	good	Amazing Bumpman	ColecoVision/Amazing Bumpman (1986) (Telegames).col	78a738af	16384	skip	0	1441	6	false	6522	a7a6	0	0	
 5	ALIVE	commercial	good	Antarctic Adventure	ColecoVision/Antarctic Adventure (1984) (Konami)/Antarctic Adventure (1984) (Konami) (Prototype).col	a66e5ed1	16384	skip	0	1477	8	true	9783	8109	0	0	
@@ -79,9 +79,9 @@ n	verdict	class	dump	title	file	crc32	size	header	first_cart_frame	nmis	colours	
 77	STATIC	commercial	good	Gateway to Apshai	ColecoVision/Gateway to Apshai (1984) (Epyx).col	0726b64d	16384	skip	0	1485	2	false	0	84ad	0	0	
 78	ALIVE	commercial	bad	Gorf	ColecoVision/Gorf (1981-83) (Midway)/Gorf (1981-83) (Midway) [b1].col	074ea085	16384	title	0	1480	7	true	9285	873d	0	0	
 79	ALIVE	commercial	good	Gorf	ColecoVision/Gorf (1981-83) (Midway)/Gorf (1981-83) (Midway).col	ff46becc	16384	title	0	1480	7	true	9285	873d	0	0	
-80	ALIVE	commercial	good	Gust Buster	ColecoVision/Gust Buster (1983) (Sunrise).col	f2cac67c	16384	skip	0	1499	11	false	3355	8099	0	0	
+80	ALIVE	commercial	good	Gust Buster	ColecoVision/Gust Buster (1983) (Sunrise).col	f2cac67c	16384	skip	0	1499	11	true	3355	8099	0	0	
 81	ALIVE	commercial	good	Gyruss	ColecoVision/Gyruss (1984) (Parker Bros).col	b4ef0f1f	16384	skip	0	1470	6	true	7770	ae11	0	0	
-82	ALIVE	commercial	good	H.E.R.O.	ColecoVision/H.E.R.O. (1984) (Activision).col	685ab9b5	16384	skip	0	1476	13	false	9273	a72e	0	0	
+82	ALIVE	commercial	good	H.E.R.O.	ColecoVision/H.E.R.O. (1984) (Activision).col	685ab9b5	16384	skip	0	1476	13	true	9273	a72e	0	0	
 83	ALIVE	commercial	alt	Heist, The	ColecoVision/Heist, The (1983) (Micro Fun)/Heist, The (1983) (Micro Fun) [a1].col	866849d1	32768	skip	0	568	9	true	10336	8c0c	0	1	0100
 84	ALIVE	commercial	trainer	Heist, The	ColecoVision/Heist, The (1983) (Micro Fun)/Heist, The (1983) (Micro Fun) [t1] (50 Men).col	bc3b9f78	24576	skip	0	568	9	true	10336	8c26	0	1	0100
 85	ALIVE	commercial	trainer	Heist, The	ColecoVision/Heist, The (1983) (Micro Fun)/Heist, The (1983) (Micro Fun) [t2] (8 Men).col	b0f5dcb4	24576	skip	0	568	9	true	10336	8c0c	0	1	0100
@@ -140,7 +140,7 @@ n	verdict	class	dump	title	file	crc32	size	header	first_cart_frame	nmis	colours	
 138	ALIVE	commercial	good	Pac-Man	ColecoVision/Pac-Man (1983) (Atarisoft)/Pac-Man (1983) (Atarisoft) (Prototype) [o1].col	1c7c99d8	16896	skip	0	1265	9	true	7366	a971	0	0	
 139	ALIVE	commercial	good	Pac-Man	ColecoVision/Pac-Man (1983) (Atarisoft)/Pac-Man (1983) (Atarisoft) (Prototype).col	a40a07e8	16384	skip	0	1265	9	true	7366	a971	0	0	
 140	ALIVE	commercial	good	Pepper II	ColecoVision/Pepper II (1983) (Exidy).col	53b85e20	16384	title	0	704	8	true	8436	ab14	0	0	
-141	ALIVE	commercial	good	Pitfall II - Lost Caverns	ColecoVision/Pitfall II - Lost Caverns (1983-84) (Activision).col	851a455f	16384	skip	0	902	10	false	6811	b8ec	0	0	
+141	ALIVE	commercial	good	Pitfall II - Lost Caverns	ColecoVision/Pitfall II - Lost Caverns (1983-84) (Activision).col	851a455f	16384	skip	0	902	10	true	6811	b8ec	0	0	
 142	ALIVE	commercial	good	Pitfall!	ColecoVision/Pitfall! (1983) (Activision)/Pitfall! (1983) (Activision) [!].col	d4f180df	16384	skip	0	1467	9	true	5180	8176	0	0	
 143	ALIVE	commercial	bad	Pitfall!	ColecoVision/Pitfall! (1983) (Activision)/Pitfall! (1983) (Activision) [b1].col	312ae55a	16384	skip	0	1467	9	true	5180	8176	0	0	
 144	ALIVE	commercial	alt	Pitstop	ColecoVision/Pitstop (1983) (Epyx)/Pitstop (1983) (Epyx) [a1].col	81be4f55	16384	skip	0	1434	10	true	5168	93a4	0	0	
@@ -152,9 +152,9 @@ n	verdict	class	dump	title	file	crc32	size	header	first_cart_frame	nmis	colours	
 150	ALIVE	commercial	good	Power Lords - Quest for Volcan	ColecoVision/Power Lords - Quest for Volcan (1983) (Prototype).col	caa61d8d	32768	skip	0	1308	5	true	16382	818c	0	0	
 151	ALIVE	pd	good	Adventurium3 Demo	ColecoVision/Public Domain/Adventurium3 Demo (2000) (PD).col	6cd063aa	14464	skip	0	1474	2	false	24573	85d4	0	0	
 152	ALIVE	pd	good	Air Battle V0.4 by Daniel Bienvenu	ColecoVision/Public Domain/Air Battle V0.4 by Daniel Bienvenu (July 10) (2000) (PD).col	7c66aba6	23808	skip	0	1469	10	true	19865	9a1d	0	0	
-153	STATIC	pd	good	Amazing Snake Beta 4 by Serge-Eric Tremblay	ColecoVision/Public Domain/Amazing Snake Beta 4 by Serge-Eric Tremblay (2001) (PD).col	af01e7dd	29952	skip	0	1455	9	false	0	dbd6	0	0	
-154	STATIC	pd	good	Amazing Snake Beta 5 by Serge-Eric Tremblay	ColecoVision/Public Domain/Amazing Snake Beta 5 by Serge-Eric Tremblay (2001) (PD).col	5ba1a6c8	31744	skip	0	1455	9	false	0	e06f	0	0	
-155	STATIC	pd	good	Amazing Snake Beta X by Serge-Eric Tremblay	ColecoVision/Public Domain/Amazing Snake Beta X by Serge-Eric Tremblay (2001) (PD).col	7da41b23	19200	skip	0	1456	8	false	0	b666	0	0	
+153	ALIVE	pd	good	Amazing Snake Beta 4 by Serge-Eric Tremblay	ColecoVision/Public Domain/Amazing Snake Beta 4 by Serge-Eric Tremblay (2001) (PD).col	af01e7dd	29952	skip	0	1455	9	true	0	dbd6	0	0	
+154	ALIVE	pd	good	Amazing Snake Beta 5 by Serge-Eric Tremblay	ColecoVision/Public Domain/Amazing Snake Beta 5 by Serge-Eric Tremblay (2001) (PD).col	5ba1a6c8	31744	skip	0	1455	9	true	0	e06f	0	0	
+155	ALIVE	pd	good	Amazing Snake Beta X by Serge-Eric Tremblay	ColecoVision/Public Domain/Amazing Snake Beta X by Serge-Eric Tremblay (2001) (PD).col	7da41b23	19200	skip	0	1456	8	true	0	b666	0	0	
 156	ALIVE	pd	good	BUsTin-Out Demo 0.5 by Daniel Bienvenu	ColecoVision/Public Domain/BUsTin-Out Demo 0.5 by Daniel Bienvenu (2000) (PD).col	c74766d8	32384	skip	0	1451	15	true	11452	8ef2	0	0	
 157	ALIVE	pd	good	BUsTin-Out Volume 0 by Daniel Bienvenu	ColecoVision/Public Domain/BUsTin-Out Volume 0 by Daniel Bienvenu (2000) (PD).col	edca3a1f	32768	skip	0	1456	8	true	10248	943e	0	0	
 158	ALIVE	pd	good	BUsTin-Out Volume 1 by Daniel Bienvenu	ColecoVision/Public Domain/BUsTin-Out Volume 1 by Daniel Bienvenu (2000) (PD).col	97b601a2	32768	skip	0	1456	8	true	10248	9476	0	0	
@@ -192,9 +192,9 @@ n	verdict	class	dump	title	file	crc32	size	header	first_cart_frame	nmis	colours	
 190	BLANK	pd	bad	Nim by Daniel Bienvenu	ColecoVision/Public Domain/Nim by Daniel Bienvenu (Nov 03) (2000) (PD) [b1].col	9b8f6dad	6934	skip	0	0	1	false	0	8127	0	0	
 191	ALIVE	pd	good	Nim by Daniel Bienvenu	ColecoVision/Public Domain/Nim by Daniel Bienvenu (Nov 03) (2000) (PD).col	9c059a51	6912	skip	0	1462	3	false	8517	8cd8	0	0	
 192	ALIVE	pd	good	Pere Noel by Daniel Bienvenu	ColecoVision/Public Domain/Pere Noel by Daniel Bienvenu (2000) (PD).col	3f84cc6c	14464	skip	0	1474	2	false	24573	85d4	0	0	
-193	ALIVE	pd	good	Puckman Sounds V001	ColecoVision/Public Domain/Puckman Sounds V001 (2003) (PD).col	cfd41a7a	32768	skip	0	1456	6	false	14697	8bf3	0	0	
-194	ALIVE	pd	good	Puckman Sounds V002	ColecoVision/Public Domain/Puckman Sounds V002 (2003) (PD).col	913bb176	32768	skip	0	1456	6	false	14697	8bf0	0	0	
-195	ALIVE	pd	good	Puckman Sounds V003	ColecoVision/Public Domain/Puckman Sounds V003 (2003) (PD).col	a7b81956	32768	skip	0	1456	6	false	14697	8bf8	0	0	
+193	ALIVE	pd	good	Puckman Sounds V001	ColecoVision/Public Domain/Puckman Sounds V001 (2003) (PD).col	cfd41a7a	32768	skip	0	1456	6	true	14697	8bf3	0	0	
+194	ALIVE	pd	good	Puckman Sounds V002	ColecoVision/Public Domain/Puckman Sounds V002 (2003) (PD).col	913bb176	32768	skip	0	1456	6	true	14697	8bf0	0	0	
+195	ALIVE	pd	good	Puckman Sounds V003	ColecoVision/Public Domain/Puckman Sounds V003 (2003) (PD).col	a7b81956	32768	skip	0	1456	6	true	14697	8bf8	0	0	
 196	ALIVE	pd	good	Purple Dinosaur Massacre by John Dondzila	ColecoVision/Public Domain/Purple Dinosaur Massacre by John Dondzila (1996) (PD).col	137d6c4c	9494	skip	0	0	10	true	0	85e4	0	0	
 197	ALIVE	pd	good	Reversi Demo by Daniel Bienvenu	ColecoVision/Public Domain/Reversi Demo by Daniel Bienvenu (2001) (PD).col	bbef9e8f	16512	skip	0	1461	7	false	16382	9f50	0	0	
 198	ALIVE	pd	good	Sound FX Vol 1 by Daniel Bienvenu	ColecoVision/Public Domain/Sound FX Vol 1 by Daniel Bienvenu (2000) (PD).col	0b619934	4608	skip	0	1468	3	false	8191	8a4b	0	0	
@@ -294,7 +294,7 @@ n	verdict	class	dump	title	file	crc32	size	header	first_cart_frame	nmis	colours	
 292	ALIVE	commercial	good	War Room	ColecoVision/War Room (1983) (Probe 2000)/War Room (1983) (Probe 2000).col	308a949b	32768	skip	0	1478	9	true	16382	8f19	0	0	
 293	ALIVE	commercial	good	Wing War	ColecoVision/Wing War (1983) (Imagic).col	04eeef44	16384	title	0	1493	8	true	3088	80c1	0	0	
 294	ALIVE	commercial	good	Wizard of Id's Wizmath	ColecoVision/Wizard of Id's Wizmath (1984) (Sierravision).col	b9ba2bb6	16384	skip	0	1494	3	false	6506	8085	0	0	
-295	ALIVE	commercial	good	Word Feud	ColecoVision/Word Feud (1984) (Xonox).col	9f49bed8	16384	skip	0	1463	4	false	326	8f26	0	2	18F7,1968
+295	ALIVE	commercial	good	Word Feud	ColecoVision/Word Feud (1984) (Xonox).col	9f49bed8	16384	skip	0	1463	4	true	326	8f26	0	2	18F7,1968
 296	STATIC	commercial	good	Yolk's on You, The	ColecoVision/Yolk's on You, The (1983) (20th Century Fox) (Prototype).col	997ad8de	16384	skip	0	1060	8	false	0	89de	0	0	
 297	ALIVE	commercial	bad	Zaxxon	ColecoVision/Zaxxon (1982) (Sega)/Zaxxon (1982) (Sega) [b1].col	1f947468	24576	title	0	516	1	true	17413	8ad1	0	0	
 298	ALIVE	commercial	good	Zaxxon	ColecoVision/Zaxxon (1982) (Sega)/Zaxxon (1982) (Sega).col	8cb0891a	24576	title	0	516	1	true	17413	8ad1	0	0	
