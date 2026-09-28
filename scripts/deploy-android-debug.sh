@@ -70,9 +70,12 @@ echo "[3/3] ./gradlew :app:assembleDebug"
 APK="$ANDROID/app/build/outputs/apk/debug/app-debug.apk"
 echo "APK: $APK"
 
-# The debug APK always lives at this fixed Drive slot, replacing the current one,
-# so a phone/tablet can pull it without a cable (Drive for Desktop syncs it up).
-DRIVE_SLOT="${TROPHYHUB_DEBUG_APK:-/g/My Drive/Trophy Hub/TrophyHub-debug.apk}"
+# The debug APK goes to a Drive slot of this core's own, replacing the last one
+# there, so a phone/tablet can pull it without a cable (Drive for Desktop syncs
+# it up). Not the shared TrophyHub-debug.apk: that one has a notes file beside it
+# naming its build, and overwriting the APK from here leaves the notes describing
+# a different one. Set TROPHYHUB_DEBUG_APK to aim elsewhere.
+DRIVE_SLOT="${TROPHYHUB_DEBUG_APK:-/g/My Drive/Trophy Hub/TrophyHub-debug-colecorust.apk}"
 if [ -d "$(dirname "$DRIVE_SLOT")" ]; then
   cp "$APK" "$DRIVE_SLOT"
   echo "Drive: $DRIVE_SLOT (replaced)"
