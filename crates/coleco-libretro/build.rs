@@ -7,8 +7,8 @@
 //! `jniLibs/` in the Android app is a shared directory with no version in it,
 //! written by several core repos and assembled by a third. Without a stamp,
 //! "which ColecoRust is on this device" is answered from mtimes and section sizes,
-//! which is inference. Lifted from MegaRust, which took it from PocketRust, so the fleet reads every
-//! core the same way.
+//! which is inference. Lifted from MegaRust, which took it from PocketRust, so
+//! every one of my cores is read the same way.
 //!
 //! The identity is passed IN by `scripts/deploy-android-debug.sh` as
 //! `COLECORUST_BUILD_ID` and declared a rerun trigger, because a build script's

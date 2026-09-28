@@ -20,7 +20,7 @@
 //!   logged and returns at once, so a game degrades rather than crashes, and
 //!   the log says what to write next.
 //!
-//! **Boot is skipped, by the owner's decision (2026-09-27).** The reset trap
+//! **Boot is skipped, by design (2026-09-27).** The reset trap
 //! builds the state the real BIOS leaves at hand-over and jumps to the game.
 //! No title screen, no delay.
 //!

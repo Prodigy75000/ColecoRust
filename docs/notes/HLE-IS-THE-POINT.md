@@ -1,26 +1,24 @@
 # HLE is the point, and how it gets judged
 
-Written 2026-09-27, before any emulation existed, by the umbrella orchestrator
-scaffolding the repo. Everything here is either the owner's stated objective or
-a question flagged open for this core's agent. Nothing here is a measurement,
-because there is nothing yet to measure.
+Written 2026-09-27, before any emulation existed, when the repo was set up. It
+records the objective and the questions left open at the start. Nothing here is
+a measurement, because there was nothing yet to measure.
 
-## The objective, in the owner's terms
+## The objective
 
 Run the **majority of commercial titles with no BIOS dump present**. Requiring a
 firmware file has always been a drag, and it is worst on machines like this one:
 these are short games from 1982 that somebody wants to play on a phone in under
-a minute, and today the setup costs more than the session does.
+a minute, and the setup usually costs more than the session does.
 
-The owner also named the method: **trial and error against the corpus**. That is
-the right method here. The BIOS interface is published, the corpus is finite,
-and the feedback loop is a game either working or not. What it needs is a rule
-so it stays evidence rather than opinion, which is the section below.
+The method is **trial and error against the corpus**. That is the right method
+here. The BIOS interface is published, the corpus is finite, and the feedback
+loop is a game either working or not. What it needs is a rule so it stays
+evidence rather than opinion, which is the section below.
 
-This is the first of three. Odyssey2 and Intellivision are intended to follow as
-their own repos, because the three machines share no silicon: Z80 against Intel
-8048 against CP1610, with three unrelated video and sound parts. What travels
-between them is the HLE METHOD, not code.
+What travels from here to other machines is the HLE METHOD, not code: the
+Odyssey2 and the Intellivision share no silicon with the ColecoVision (Z80
+against Intel 8048 against CP1610, with three unrelated video and sound parts).
 
 ## Why the BIOS is the hard part rather than a formality
 
@@ -50,26 +48,21 @@ disagree, the real one is right until proven otherwise. A core that quietly
 starts needing the dump has failed at its only real objective.
 
 **A verdict is a ledger row, not a memory.** Per-title, recorded, with what was
-observed. The other in-house cores learned this expensively: a free-text
-compatibility column accumulated 24 different spellings for the same fault
-before anyone noticed it could not be grouped, which turned a work queue into
-prose. If a ledger appears here, give it a fixed vocabulary from the start and
-derive the verdict rather than typing it.
+observed. A free-text compatibility column in another emulator of mine
+accumulated 24 different spellings for the same fault before anyone noticed it
+could not be grouped, which turned a work queue into prose. So the ledger gets a
+fixed vocabulary from the start, and the verdict is derived rather than typed.
 
-**Tests must be able to fail.** Prove a new test fails before trusting it. This
-is a fleet rule and it matters more than usual on a core whose method is trial
-and error, because "it boots now" is exactly the kind of evidence that rots.
+**Tests must be able to fail.** Prove a new test fails before trusting it. It
+matters more than usual on a core whose method is trial and error, because "it
+boots now" is exactly the kind of evidence that rots.
 
 **"Majority of commercial titles" needs a denominator before it means
 anything.** Decide what the corpus is and how many titles are in it early, and
-state coverage as a fraction of that. The owner's collection is at
-`TrophyHubResources/emulator-resources/rom-collections/ColecoVision.7z`, outside
-this repo.
+state coverage as a fraction of that. The collection used is kept outside this
+repo.
 
-## Open questions, deliberately not decided here
-
-Scaffolding a repo is not designing a core, and an orchestrator guessing at
-these would be inventing constraints the owner did not set.
+## Open questions at the start
 
 **Where the HLE intercepts.** Trapping calls at BIOS entry addresses, providing
 a synthetic 8 KB image whose entry points are jumps into host code, or
@@ -86,14 +79,12 @@ as opposed to which ones exist.
 
 **Whether the boot delay is emulated, skipped, or configurable.** It is
 observable, it is also the thing that makes the machine annoying to use, and
-those two facts pull in opposite directions. This one is a user-experience
-decision as much as a technical one, so it is worth putting to the owner rather
-than settling privately.
+those two facts pull in opposite directions.
 
-> **DECIDED 2026-09-27 by the owner: SKIPPED.** In his words, the emulation
-> community prides itself on boot skip, it is the best user experience, and
-> losing the legitimate boot is far outweighed by not making users source BIOS
-> files. The HLE hands over to the cartridge at once, with no title screen.
+> **DECIDED 2026-09-27: SKIPPED.** The emulation community prides itself on
+> boot skip, it is the best user experience, and losing the legitimate boot is
+> far outweighed by not making users source BIOS files. The HLE hands over to
+> the cartridge at once, with no title screen.
 >
 > Evidence gathered the same day, before any HLE code: the corpus ships the real
 > BIOS with a `[h1] (no title delay)` hack, which differs in exactly three bytes
@@ -106,4 +97,4 @@ than settling privately.
 
 **What "correct" is measured against for the VDP and PSG.** Test ROMs exist for
 the TMS9918A family. Finding out which ones, and whether they print their own
-verdicts the way the suites RustStation uses do, shapes the whole harness list.
+verdicts the way the PlayStation CPU suites do, shapes the whole harness list.

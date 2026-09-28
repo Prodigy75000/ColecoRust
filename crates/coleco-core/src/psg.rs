@@ -11,7 +11,7 @@
 //! - **White noise is TI's sequence, not Sega's.** Maxim's SN76489 notes
 //!   (MegaRust `docs/audio/sn76489-notes.md`) give taps at bits 1 and 2 for
 //!   the SC-3000H, whose chip is the same SN76489AN, against bits 0 and 3 for
-//!   Sega's. His taps are stated for a 16-bit register shifting right, in
+//!   Sega's. The taps are stated for a 16-bit register shifting right, in
 //!   which bit 0 is only a one-step delay of bit 1, so the same sequence comes
 //!   from a 15-bit register tapped at bits 0 and 1: `x^15 + x + 1`, maximal
 //!   length. That is what this models.

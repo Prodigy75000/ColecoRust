@@ -8,9 +8,8 @@
 //! MegaRust's `tests/z80-zexall/`, whose `SOURCES.md` names the upstream release.
 //!
 //! ZEXALL runs every instruction over an exhaustive set of operands, CRCs the
-//! results, and compares against values captured from real hardware. The rule
-//! is the fleet's: the CPU is ground to green here before it is trusted to
-//! drive anything.
+//! results, and compares against values captured from real hardware. The CPU
+//! is ground to green here before it is trusted to drive anything.
 //!
 //! The Master System build is fine for a ColecoVision core: it runs on its own
 //! test bus below, which is not either machine, and what it measures is the

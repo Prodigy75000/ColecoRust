@@ -23,7 +23,7 @@
 //! A real BIOS dump is an ORACLE, never a requirement. Run a title both ways
 //! and diff; when they disagree, the real one is right until proven otherwise.
 //!
-//! # Binding contracts inherited from the other in-house cores
+//! # Contracts shared with my other emulator cores
 //!
 //! - **Save states are byte-identical across architectures.** Fixed size,
 //!   little-endian, versioned. Same bytes on x86-64 and arm64, because netplay

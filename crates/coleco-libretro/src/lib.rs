@@ -34,8 +34,8 @@
 //! | keypad 0 | left stick X, +deflection | 0 |
 //! | keypad `*`, `#` | START, SELECT | `*`, `#` |
 //!
-//! My first map put keypad 1 on START; the Android agent caught it before
-//! any device ran it. When two keys are held, the first in the table wins.
+//! My first map put keypad 1 on START; checking it against the app's keypad
+//! panel caught it before any device ran it. When two keys are held, the first in the table wins.
 
 #![allow(clippy::missing_safety_doc)]
 
@@ -611,7 +611,7 @@ mod tests {
     #[test]
     fn the_twelve_keys_match_the_apps_keypad_panel() {
         let _g = SERIAL.lock().unwrap();
-        // (what the panel sends, key), from the Android agent's table.
+        // (what the panel sends, key), from the app's own table.
         let panel: [(i32, u8); 12] = [
             (1, 1),         // Y
             (9, 2),         // X

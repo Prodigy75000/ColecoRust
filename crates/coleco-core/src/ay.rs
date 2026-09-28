@@ -8,7 +8,7 @@
 //! one implementation: sixteen registers, three square-wave channels with
 //! 12-bit periods, one noise source with a 5-bit period, a mixer that can
 //! gate each channel's tone and noise, 4-bit levels, and one envelope
-//! generator with eight useful shapes. No sibling core has this chip to lift.
+//! generator with eight useful shapes. None of my other cores has this chip to lift.
 //!
 //! **Clock.** The SGM runs it at half the Z80's clock. The chip divides by 8
 //! before its tone counters, so a tone counter ticks once per 16 CPU clocks,
