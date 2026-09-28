@@ -108,7 +108,8 @@ pub(super) fn mode2(bus: &ColecoBus) -> bool {
 /// | `$196B` | the title screen's delay: HL passes of 255 | Aquattack, Dr. Seuss |
 /// | `$1987` | GAME_OPT after its clear and MODE_1 | The Yolk's on You |
 /// | `$1C4F` | PUT_VRAM without its sprite-table check | Aquattack |
-pub const ENTRY_POINTS: [u16; 6] = [0x07e8, 0x080b, 0x08c0, 0x196b, 0x1987, 0x1c4f];
+/// | `$0295` | the sound driver's channel reassignment | Boxxle |
+pub const ENTRY_POINTS: [u16; 7] = [0x07e8, 0x080b, 0x08c0, 0x196b, 0x1987, 0x1c4f, 0x0295];
 
 pub fn call(target: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
     use super::{objects, sound, timers};
@@ -131,6 +132,7 @@ pub fn call(target: u16, cpu: &mut Z80, bus: &mut ColecoBus) -> Option<Flow> {
     Some(Flow::Ret(match target {
         0x0213 => sound::sound_init(cpu, bus),
         0x023b => sound::turn_off_sound(cpu, bus),
+        0x0295 => sound::reassign_entry(cpu, bus),
         0x0300 => sound::play_songs(cpu, bus),
         0x1cca => write_register(cpu, bus),
         0x1d57 => read_register(cpu, bus),

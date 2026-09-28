@@ -43,6 +43,7 @@
 
 pub mod ay;
 pub mod census;
+pub mod eeprom;
 pub mod hle;
 pub mod machine;
 pub mod psg;
@@ -80,7 +81,8 @@ pub const BIOS_SIZE: usize = 8 * 1024;
 /// v3: the Mega Cart page at `$C000` (0 on a plain cartridge), 2026-09-28.
 /// v4: the Super Game Module: its AY-3-8910, 32 KB of RAM and the two
 /// switches that map it, 2026-09-28.
-pub const SAVE_STATE_VERSION: u32 = 4;
+/// v5: an Activision board's EEPROM, after the rest, 2026-09-28.
+pub const SAVE_STATE_VERSION: u32 = 5;
 
 /// How the machine gets its BIOS behaviour.
 ///

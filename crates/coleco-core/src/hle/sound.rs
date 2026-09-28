@@ -354,6 +354,16 @@ fn reassign(r: &mut R, bus: &mut ColecoBus) {
     r.ix = saved;
 }
 
+/// `$0295` entered directly, as Boxxle does (a `JP $0295` ending its own
+/// song start): the channels' reassignment on its own.
+pub fn reassign_entry(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
+    let mut r = R::load(cpu);
+    reassign(&mut r, bus);
+    r.store(cpu);
+    // Its own RET is the trap's, already counted.
+    r.t - 10
+}
+
 /// Decrement the low nibble of `(HL)` in place, the high nibble kept
 /// (`$0190`). A and the flags are those of the `SUB 1` on the nibble; Z when
 /// it has just reached zero.

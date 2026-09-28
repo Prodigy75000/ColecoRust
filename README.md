@@ -23,7 +23,8 @@ it came from and at which commit.
 | BIOS | ✅ its own, see below; the real one is never needed |
 | Save states | ✅ full machine state; a state reloads exactly as it was saved |
 | Memory map | ✅ SYSTEM_RAM and a memory descriptor, so achievements, cheats and RAM watch all address the core |
-| Mega Cart bank switching | ✅ up to 1 MB; the other boards over 32 KB (the 64 KB ones with the header up front) do not load yet |
+| Mega Cart bank switching | ✅ up to 1 MB |
+| Activision board | ✅ 64 KB bank switching and the serial EEPROM (24C08 or 24C256) that keeps saved games, as libretro save RAM |
 | Speed rollers and steering wheel | ❌ not yet: the Super Action controllers and the Expansion Module 2 wheel have no input |
 | PAL | ❌ NTSC only |
 
@@ -45,7 +46,9 @@ All 28 Mega Cart homebrew titles tried reach their games, the 21 of them made
 for the Super Game Module included (Knightmare, Gauntlet, Wizard of Wor, the
 Super Game editions of Zaxxon, Subroc and Buck Rogers, and more). The module
 changes nothing for the original library: the full smoke test gives the same
-result, title for title, with it plugged in.
+result, title for title, with it plugged in. The three Activision-board
+homebrew titles tried (Black Onyx, Boxxle, and the 64 KB Space Shuttle) reach
+their games too.
 
 ## The BIOS
 

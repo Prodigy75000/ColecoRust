@@ -24,6 +24,15 @@
 //! the header, since it is the one the machine starts in; that is how a Mega
 //! Cart image is told from a plain one, which has its header at the start.
 //!
+//! A cartridge of 48 or 64 KB with its header at the START is Activision's
+//! board (Black Onyx, Boxxle, the 64 KB Space Shuttle): page 0 fixed at
+//! `$8000`, and a WRITE to `$FF90`, `$FFA0` or `$FFB0` puts page 1, 2 or 3 at
+//! `$C000`. Its serial EEPROM ([`crate::eeprom`]) keeps saved games: writes
+//! to `$FFC0`/`$FFD0` drive the clock low/high, `$FFE0`/`$FFF0` the data line
+//! low/high, and a read of `$FF80` returns the data line in bit 0. The
+//! addresses are ColecoDS's, whose author worked them out on the boards;
+//! Gearcoleco agrees on the page switching.
+//!
 //! **The Super Game Module** is always plugged in, as it is on most
 //! emulators: games made for it test for it and say so on screen when it is
 //! missing, and games made before it never touch its ports. It adds 32 KB of
@@ -79,6 +88,44 @@ pub fn is_mega_cart(cart: &[u8]) -> bool {
         && n <= MAX_MEGA_CART
         && n % PAGE == 0
         && matches!(cart[n - PAGE..n - PAGE + 2], [0x55, 0xaa] | [0xaa, 0x55])
+}
+
+/// Largest Activision board: four pages, as many as its hotspots choose.
+pub const MAX_ACTIVISION: usize = 4 * PAGE;
+
+/// Whether a cartridge is an Activision board image: over 32 KB, up to
+/// 64 KB, whole pages, and its header at the start.
+pub fn is_activision(cart: &[u8]) -> bool {
+    let n = cart.len();
+    n > MAX_CART
+        && n <= MAX_ACTIVISION
+        && n % PAGE == 0
+        && matches!(cart[0..2], [0x55, 0xaa] | [0xaa, 0x55])
+}
+
+/// The EEPROM an Activision board carries. Nothing in the cartridge says, so
+/// the known games are named by checksum: Black Onyx has a 24C08, and every
+/// other one gets a 24C256, Boxxle's, which is also harmless to a game that
+/// never touches it.
+pub fn activision_eeprom(cart: &[u8]) -> crate::eeprom::Chip {
+    const BLACK_ONYX: u32 = 0xdddd_1396;
+    if crc32(cart) == BLACK_ONYX {
+        crate::eeprom::Chip::C24C08
+    } else {
+        crate::eeprom::Chip::C24C256
+    }
+}
+
+/// CRC-32 (IEEE), the checksum every cartridge database uses.
+pub fn crc32(bytes: &[u8]) -> u32 {
+    let mut c = !0u32;
+    for &b in bytes {
+        c ^= b as u32;
+        for _ in 0..8 {
+            c = if c & 1 != 0 { (c >> 1) ^ 0xedb8_8320 } else { c >> 1 };
+        }
+    }
+    !c
 }
 
 /// The firmware the machine runs from.
@@ -159,10 +206,14 @@ impl Pad {
 pub struct ColecoBus {
     bios: Box<[u8; BIOS_SIZE]>,
     cart: Vec<u8>,
-    /// Mega Cart pages, 0 for a plain cartridge.
+    /// Pages of a Mega Cart or an Activision board, 0 for a plain cartridge.
     pages: usize,
-    /// The page at `$C000-$FFFF` on a Mega Cart.
+    /// The page at `$C000-$FFFF`.
     page: u8,
+    /// An Activision board: page 0 fixed, hotspot writes, the EEPROM.
+    activision: bool,
+    /// The Activision board's EEPROM: the game's saves.
+    pub eeprom: Option<crate::eeprom::Eeprom>,
     pub ram: [u8; WORK_RAM],
     /// The Super Game Module's 32 KB.
     pub sgm_ram: Box<[u8; SGM_RAM]>,
@@ -257,6 +308,11 @@ impl ColecoBus {
             0x2000..=0x5fff => 0xff,
             0x6000..=0x7fff => self.ram[addr as usize & (WORK_RAM - 1)],
             _ if self.pages == 0 => *self.cart.get(addr as usize - 0x8000).unwrap_or(&0xff),
+            0xff80 if self.activision => match &self.eeprom {
+                Some(e) => e.read_sda() as u8,
+                None => 0xff,
+            },
+            0x8000..=0xbfff if self.activision => self.cart[addr as usize - 0x8000],
             0x8000..=0xbfff => self.cart[(self.pages - 1) * PAGE + (addr as usize - 0x8000)],
             _ => self.cart[self.page as usize * PAGE + (addr as usize - 0xc000)],
         }
@@ -268,7 +324,7 @@ impl Bus for ColecoBus {
         if let Some(p) = &mut self.probe {
             p.read(addr);
         }
-        if self.pages != 0 && addr >= 0xffc0 {
+        if self.pages != 0 && !self.activision && addr >= 0xffc0 {
             self.page = ((addr & 0x3f) as usize % self.pages) as u8;
         }
         self.peek(addr)
@@ -277,6 +333,22 @@ impl Bus for ColecoBus {
     fn write(&mut self, addr: u16, val: u8) {
         if let Some(p) = &mut self.probe {
             p.write(addr);
+        }
+        if self.activision && addr >= 0xff80 {
+            match addr {
+                0xff90 | 0xffa0 | 0xffb0 => self.page = (((addr >> 4) & 3) as usize % self.pages) as u8,
+                0xffc0 | 0xffd0 => {
+                    if let Some(e) = &mut self.eeprom {
+                        e.set_scl(addr == 0xffd0)
+                    }
+                }
+                0xffe0 | 0xfff0 => {
+                    if let Some(e) = &mut self.eeprom {
+                        e.set_sda(addr == 0xfff0)
+                    }
+                }
+                _ => {}
+            }
         }
         self.poke(addr, val);
     }
@@ -355,7 +427,8 @@ impl Coleco {
             Firmware::Hle => crate::hle::image(),
             Firmware::Real(b) => b,
         };
-        let pages = if is_mega_cart(cart) { cart.len() / PAGE } else { 0 };
+        let activision = is_activision(cart);
+        let pages = if is_mega_cart(cart) || activision { cart.len() / PAGE } else { 0 };
         if cart.len() > MAX_CART && pages == 0 {
             return Err(MachineError::CartTooLarge(cart.len()));
         }
@@ -363,9 +436,13 @@ impl Coleco {
             bios,
             cart: cart.to_vec(),
             pages,
-            // Page 0 until the game chooses. The board's own power-on page
-            // is not documented; games select one before they use it.
-            page: 0,
+            // Mega Cart: page 0 until the game chooses; the board's own
+            // power-on page is not documented, and games select one before
+            // they use it. Activision: page 1, so $8000-$FFFF starts as a
+            // plain 32 KB cartridge would, as ColecoDS starts it.
+            page: if activision { 1 } else { 0 },
+            activision,
+            eeprom: activision.then(|| crate::eeprom::Eeprom::new(activision_eeprom(cart))),
             // Real SRAM powers up as noise. Zero is chosen for determinism;
             // the BIOS clears what it uses.
             ram: [0; WORK_RAM],
@@ -550,6 +627,9 @@ impl Coleco {
         w.bytes(&self.bus.sgm_ram[..]);
         w.bool(self.bus.sgm_low);
         w.bool(self.bus.sgm_high);
+        if let Some(e) = &self.bus.eeprom {
+            e.save(&mut w);
+        }
         w.into_bytes()
     }
 
@@ -574,12 +654,15 @@ impl Coleco {
         self.bus.in_line = r.bool()?;
         let page = r.u8()?;
         if self.bus.pages != 0 && page as usize >= self.bus.pages {
-            return Err(LoadError::BadValue("Mega Cart page past the cartridge"));
+            return Err(LoadError::BadValue("cartridge page past the cartridge"));
         }
         self.bus.page = page;
         r.bytes(&mut self.bus.sgm_ram[..])?;
         self.bus.sgm_low = r.bool()?;
         self.bus.sgm_high = r.bool()?;
+        if let Some(e) = &mut self.bus.eeprom {
+            e.load(&mut r)?;
+        }
         self.next_frame_end = None;
         r.finish()
     }
@@ -814,7 +897,7 @@ mod tests {
         let at = s.len() - SGM_RAM - 3;
         assert_eq!(bad[at], 2);
         bad[at] = 4;
-        assert_eq!(b.load_state(&bad), Err(LoadError::BadValue("Mega Cart page past the cartridge")));
+        assert_eq!(b.load_state(&bad), Err(LoadError::BadValue("cartridge page past the cartridge")));
     }
 
     #[test]
@@ -886,13 +969,126 @@ mod tests {
         assert_eq!(b.save_state(), s);
     }
 
+    /// A 64 KB Activision board: four pages with their numbers at $100, the
+    /// header at the start of page 0.
+    fn activision_cart() -> Vec<u8> {
+        let mut cart = vec![0u8; 4 * PAGE];
+        for p in 0..4 {
+            cart[p * PAGE + 0x100] = 0xb0 + p as u8;
+        }
+        cart[0..2].copy_from_slice(&[0x55, 0xaa]);
+        cart
+    }
+
+    #[test]
+    fn an_activision_board_switches_pages_on_writes_to_its_hotspots() {
+        let cart = activision_cart();
+        assert!(is_activision(&cart) && !is_mega_cart(&cart));
+        let mut m = Coleco::new(Firmware::Hle, &cart).unwrap();
+        assert_eq!(m.bus.read(0x8100), 0xb0, "page 0 fixed at $8000");
+        assert_eq!(m.bus.read(0xc100), 0xb1, "page 1 at $C000 from power-on");
+        m.bus.write(0xffb0, 0);
+        assert_eq!(m.bus.read(0xc100), 0xb3);
+        m.bus.write(0xffa0, 0);
+        assert_eq!(m.bus.read(0xc100), 0xb2);
+        m.bus.read(0xff90);
+        m.bus.read(0xffc1);
+        assert_eq!(m.bus.read(0xc100), 0xb2, "reads choose nothing, Mega Cart's included");
+        assert_eq!(m.bus.read(0x8100), 0xb0);
+    }
+
+    /// The game's side of the EEPROM: SCL and SDA driven by writes to the
+    /// hotspots, SDA read back at $FF80.
+    struct Wire<'a>(&'a mut Coleco);
+
+    impl Wire<'_> {
+        fn scl(&mut self, high: bool) {
+            self.0.bus.write(if high { 0xffd0 } else { 0xffc0 }, 0);
+        }
+        fn sda(&mut self, high: bool) {
+            self.0.bus.write(if high { 0xfff0 } else { 0xffe0 }, 0);
+        }
+        fn read_sda(&mut self) -> bool {
+            self.0.bus.read(0xff80) & 1 != 0
+        }
+        fn start(&mut self) {
+            self.sda(true);
+            self.scl(true);
+            self.sda(false);
+            self.scl(false);
+        }
+        fn stop(&mut self) {
+            self.sda(false);
+            self.scl(true);
+            self.sda(true);
+        }
+        fn put(&mut self, b: u8) -> bool {
+            for i in (0..8).rev() {
+                self.sda(b >> i & 1 != 0);
+                self.scl(true);
+                self.scl(false);
+            }
+            self.sda(true);
+            self.scl(true);
+            let ack = !self.read_sda();
+            self.scl(false);
+            ack
+        }
+        fn get(&mut self) -> u8 {
+            self.sda(true);
+            let mut b = 0;
+            for _ in 0..8 {
+                self.scl(true);
+                b = b << 1 | self.read_sda() as u8;
+                self.scl(false);
+            }
+            self.scl(true);
+            self.scl(false);
+            b
+        }
+    }
+
+    #[test]
+    fn an_activision_boards_eeprom_answers_at_its_hotspots_and_is_state() {
+        let mut m = Coleco::new(Firmware::Hle, &activision_cart()).unwrap();
+        let mut w = Wire(&mut m);
+        w.start();
+        assert!(w.put(0xa0) && w.put(0x01) && w.put(0x23) && w.put(0x99));
+        w.stop();
+        w.start();
+        w.put(0xa0);
+        w.put(0x01);
+        w.put(0x23);
+        w.start();
+        assert!(w.put(0xa1));
+        assert_eq!(w.get(), 0x99);
+        w.stop();
+        assert_eq!(m.bus.eeprom.as_ref().unwrap().data[0x0123], 0x99);
+
+        let s = m.save_state();
+        let mut b = Coleco::new(Firmware::Hle, &activision_cart()).unwrap();
+        b.load_state(&s).unwrap();
+        assert_eq!(b.bus.eeprom.as_ref().unwrap().data[0x0123], 0x99);
+        assert_eq!(b.save_state(), s);
+    }
+
+    /// Black Onyx is known by its checksum and gets its 24C08; any other
+    /// Activision board gets the 24C256.
+    #[test]
+    fn the_eeprom_is_chosen_by_the_game() {
+        use crate::eeprom::Chip;
+        assert_eq!(crc32(b"123456789"), 0xcbf4_3926, "the standard CRC-32 check value");
+        assert_eq!(activision_eeprom(&activision_cart()), Chip::C24C256);
+    }
+
     #[test]
     fn over_32k_is_a_mega_cart_only_with_its_header_in_the_last_page() {
         assert!(is_mega_cart(&mega_cart()));
-        let mut header_first = vec![0u8; 4 * PAGE];
+        let mut header_first = vec![0u8; 8 * PAGE];
         header_first[0..2].copy_from_slice(&[0x55, 0xaa]);
         assert!(!is_mega_cart(&header_first));
-        assert!(matches!(Coleco::new(Firmware::Hle, &header_first), Err(MachineError::CartTooLarge(0x10000))));
+        assert!(!is_activision(&header_first), "128 KB is past the Activision board's four pages");
+        assert!(matches!(Coleco::new(Firmware::Hle, &header_first), Err(MachineError::CartTooLarge(0x20000))));
         let mut short = mega_cart();
         short.truncate(0x8000 + 4);
         assert!(!is_mega_cart(&short), "not whole pages");

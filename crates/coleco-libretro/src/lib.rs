@@ -55,6 +55,9 @@ const RETRO_ENVIRONMENT_SET_MEMORY_MAPS: c_uint = 36 | 0x10000;
 const RETRO_PIXEL_FORMAT_XRGB8888: c_uint = 1;
 
 const RETRO_REGION_NTSC: c_uint = 0;
+/// The cartridge's own save memory: the frontend loads its save file into
+/// this after the game loads, and writes it back from here.
+const RETRO_MEMORY_SAVE_RAM: c_uint = 0;
 const RETRO_MEMORY_SYSTEM_RAM: c_uint = 2;
 const RETRO_MEMDESC_SYSTEM_RAM: u64 = 1 << 2;
 
@@ -487,6 +490,12 @@ pub unsafe extern "C" fn retro_unserialize(data: *const c_void, size: usize) -> 
 pub extern "C" fn retro_get_memory_data(id: c_uint) -> *mut c_void {
     match (core(), id) {
         (Some(c), RETRO_MEMORY_SYSTEM_RAM) => c.machine.bus.ram.as_mut_ptr() as *mut c_void,
+        // An Activision board's EEPROM. It never reallocates, so the pointer
+        // holds for the whole session.
+        (Some(c), RETRO_MEMORY_SAVE_RAM) => match &mut c.machine.bus.eeprom {
+            Some(e) => e.data.as_mut_ptr() as *mut c_void,
+            None => std::ptr::null_mut(),
+        },
         _ => std::ptr::null_mut(),
     }
 }
@@ -495,6 +504,7 @@ pub extern "C" fn retro_get_memory_data(id: c_uint) -> *mut c_void {
 pub extern "C" fn retro_get_memory_size(id: c_uint) -> usize {
     match (core(), id) {
         (Some(_), RETRO_MEMORY_SYSTEM_RAM) => coleco_core::WORK_RAM,
+        (Some(c), RETRO_MEMORY_SAVE_RAM) => c.machine.bus.eeprom.as_ref().map_or(0, |e| e.data.len()),
         _ => 0,
     }
 }
@@ -571,12 +581,15 @@ mod tests {
     }
 
     unsafe fn load() {
+        load_rom(&cart());
+    }
+
+    unsafe fn load_rom(rom: &[u8]) {
         retro_set_environment(env);
         retro_set_video_refresh(video);
         retro_set_audio_sample_batch(audio);
         retro_set_input_poll(poll);
         retro_set_input_state(input);
-        let rom = cart();
         let info = RetroGameInfo { path: std::ptr::null(), data: rom.as_ptr() as *const c_void, size: rom.len(), meta: std::ptr::null() };
         assert!(retro_load_game(&info), "loads with no BIOS anywhere");
     }
@@ -599,6 +612,27 @@ mod tests {
             let expect = (44_100.0 * 60.0 / fps()) as usize;
             assert!(AUDIO_FRAMES.abs_diff(expect) < 50, "{AUDIO_FRAMES} stereo frames against {expect}");
             assert_eq!(retro_get_memory_size(RETRO_MEMORY_SYSTEM_RAM), 1024);
+            assert_eq!(retro_get_memory_size(RETRO_MEMORY_SAVE_RAM), 0, "a plain cartridge keeps nothing");
+            assert!(retro_get_memory_data(RETRO_MEMORY_SAVE_RAM).is_null());
+            retro_unload_game();
+        }
+    }
+
+    /// An Activision board's EEPROM is the save memory: a save file the
+    /// frontend copies in is what the game then reads through the chip.
+    #[test]
+    fn an_activision_boards_eeprom_is_the_save_memory() {
+        let _g = SERIAL.lock().unwrap();
+        unsafe {
+            let mut rom = cart();
+            rom.resize(0x10000, 0);
+            load_rom(&rom);
+            assert_eq!(retro_get_memory_size(RETRO_MEMORY_SAVE_RAM), 32 * 1024, "a 24C256");
+            let save = retro_get_memory_data(RETRO_MEMORY_SAVE_RAM) as *mut u8;
+            assert!(!save.is_null());
+            *save.add(0x1234) = 0x5a;
+            let c = core().unwrap();
+            assert_eq!(c.machine.bus.eeprom.as_ref().unwrap().data[0x1234], 0x5a);
             retro_unload_game();
         }
     }
