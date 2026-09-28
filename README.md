@@ -25,7 +25,7 @@ it came from and at which commit.
 | Memory map | ✅ SYSTEM_RAM and a memory descriptor, so achievements, cheats and RAM watch all address the core |
 | Mega Cart bank switching | ✅ up to 1 MB |
 | Activision board | ✅ 64 KB bank switching and the serial EEPROM (24C08 or 24C256) that keeps saved games, as libretro save RAM |
-| Speed rollers and steering wheel | ❌ not yet: the Super Action controllers and the Expansion Module 2 wheel have no input |
+| Super Action controller, steering wheel, roller controller | ❌ not yet: the Super Action's speed roller and its two extra triggers (purple, blue), the Expansion Module 2 wheel and the roller controller have no input; the games start and take the joystick and the usual two buttons |
 | PAL | ❌ NTSC only |
 
 Compatibility: **153 of 164** commercial ColecoVision titles reach gameplay with
