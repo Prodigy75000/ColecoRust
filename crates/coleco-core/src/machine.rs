@@ -18,6 +18,12 @@
 //! | `$6000-$7FFF` | 1 KB of RAM, mirrored eight times |
 //! | `$8000-$FFFF` | cartridge, up to 32 KB |
 //!
+//! A cartridge over 32 KB is a Mega Cart: 16 KB pages, the last one fixed at
+//! `$8000-$BFFF` and any one of them at `$C000-$FFFF`, chosen by READING
+//! `$FFC0-$FFFF` (the low six address bits are the page). The last page holds
+//! the header, since it is the one the machine starts in; that is how a Mega
+//! Cart image is told from a plain one, which has its header at the start.
+//!
 //! Ports are decoded on address bits 7-5 only, so each function owns 32 ports:
 //! `$80` writes select keypad mode, `$A0` is the VDP (bit 0: data or
 //! control), `$C0` writes select joystick mode, `$E0` writes go to the PSG and
@@ -43,8 +49,25 @@ pub const CYCLES_PER_LINE: i32 = 228;
 /// Leading magic on a ColecoRust state, so it can never be fed to another core.
 pub const STATE_MAGIC: &[u8; 8] = b"COLECO01";
 
-/// Largest cartridge the plain map addresses. Bank-switched boards come later.
+/// Largest cartridge the plain map addresses.
 pub const MAX_CART: usize = 0x8000;
+
+/// A Mega Cart page.
+pub const PAGE: usize = 0x4000;
+
+/// Largest Mega Cart: 64 pages, as many as six address bits choose.
+pub const MAX_MEGA_CART: usize = 64 * PAGE;
+
+/// Whether a cartridge is a Mega Cart image: over 32 KB, whole pages, and a
+/// header at the start of the last page. Anything else over 32 KB is some
+/// other board, not handled.
+pub fn is_mega_cart(cart: &[u8]) -> bool {
+    let n = cart.len();
+    n > MAX_CART
+        && n <= MAX_MEGA_CART
+        && n % PAGE == 0
+        && matches!(cart[n - PAGE..n - PAGE + 2], [0x55, 0xaa] | [0xaa, 0x55])
+}
 
 /// The firmware the machine runs from.
 pub enum Firmware {
@@ -124,6 +147,10 @@ impl Pad {
 pub struct ColecoBus {
     bios: Box<[u8; BIOS_SIZE]>,
     cart: Vec<u8>,
+    /// Mega Cart pages, 0 for a plain cartridge.
+    pages: usize,
+    /// The page at `$C000-$FFFF` on a Mega Cart.
+    page: u8,
     pub ram: [u8; WORK_RAM],
     pub vdp: Vdp,
     pub audio: Audio,
@@ -192,7 +219,9 @@ impl ColecoBus {
             0x0000..=0x1fff => self.bios[addr as usize],
             0x2000..=0x5fff => 0xff,
             0x6000..=0x7fff => self.ram[addr as usize & (WORK_RAM - 1)],
-            _ => *self.cart.get(addr as usize - 0x8000).unwrap_or(&0xff),
+            _ if self.pages == 0 => *self.cart.get(addr as usize - 0x8000).unwrap_or(&0xff),
+            0x8000..=0xbfff => self.cart[(self.pages - 1) * PAGE + (addr as usize - 0x8000)],
+            _ => self.cart[self.page as usize * PAGE + (addr as usize - 0xc000)],
         }
     }
 }
@@ -201,6 +230,9 @@ impl Bus for ColecoBus {
     fn read(&mut self, addr: u16) -> u8 {
         if let Some(p) = &mut self.probe {
             p.read(addr);
+        }
+        if self.pages != 0 && addr >= 0xffc0 {
+            self.page = ((addr & 0x3f) as usize % self.pages) as u8;
         }
         self.peek(addr)
     }
@@ -278,12 +310,17 @@ impl Coleco {
             Firmware::Hle => crate::hle::image(),
             Firmware::Real(b) => b,
         };
-        if cart.len() > MAX_CART {
+        let pages = if is_mega_cart(cart) { cart.len() / PAGE } else { 0 };
+        if cart.len() > MAX_CART && pages == 0 {
             return Err(MachineError::CartTooLarge(cart.len()));
         }
         let bus = ColecoBus {
             bios,
             cart: cart.to_vec(),
+            pages,
+            // Page 0 until the game chooses. The board's own power-on page
+            // is not documented; games select one before they use it.
+            page: 0,
             // Real SRAM powers up as noise. Zero is chosen for determinism;
             // the BIOS clears what it uses.
             ram: [0; WORK_RAM],
@@ -461,6 +498,7 @@ impl Coleco {
         w.bool(self.int_line);
         w.i32(self.bus.line_cycles);
         w.bool(self.bus.in_line);
+        w.u8(self.bus.page);
         w.into_bytes()
     }
 
@@ -483,6 +521,11 @@ impl Coleco {
         self.int_line = r.bool()?;
         self.bus.line_cycles = r.i32()?;
         self.bus.in_line = r.bool()?;
+        let page = r.u8()?;
+        if self.bus.pages != 0 && page as usize >= self.bus.pages {
+            return Err(LoadError::BadValue("Mega Cart page past the cartridge"));
+        }
+        self.bus.page = page;
         self.next_frame_end = None;
         r.finish()
     }
@@ -659,6 +702,78 @@ mod tests {
         let lines = m.cycles() / CYCLES_PER_LINE as u64;
         let frames_line = (lines % vdp::LINES_PER_FRAME as u64) as u16;
         assert_eq!(m.bus.vdp.line, frames_line, "the VDP kept pace with the cycles");
+    }
+
+    /// A 64 KB Mega Cart: four pages, each with its number at offset $100,
+    /// the header in the last one, and at its start address ($8200 in it):
+    /// LD A,($FFC2); LD A,($C100); LD ($7000),A; JR $.
+    fn mega_cart() -> Vec<u8> {
+        let mut cart = vec![0u8; 4 * PAGE];
+        for p in 0..4 {
+            cart[p * PAGE + 0x100] = 0xa0 + p as u8;
+        }
+        let last = 3 * PAGE;
+        cart[last..last + 2].copy_from_slice(&[0x55, 0xaa]);
+        cart[last + 0x0a..last + 0x0c].copy_from_slice(&[0x00, 0x82]);
+        let code = [0x3a, 0xc2, 0xff, 0x3a, 0x00, 0xc1, 0x32, 0x00, 0x70, 0x18, 0xfe];
+        cart[last + 0x200..last + 0x200 + code.len()].copy_from_slice(&code);
+        cart
+    }
+
+    #[test]
+    fn a_mega_cart_has_its_last_page_fixed_and_a_read_chooses_the_other() {
+        let mut m = Coleco::new(Firmware::Hle, &mega_cart()).unwrap();
+        assert_eq!(m.bus.read(0x8100), 0xa3, "the last page at $8000");
+        assert_eq!(m.bus.read(0xc100), 0xa0, "page 0 at $C000 from power-on");
+        m.bus.read(0xffc1);
+        assert_eq!(m.bus.read(0xc100), 0xa1);
+        m.bus.read(0xffc6);
+        assert_eq!(m.bus.read(0xc100), 0xa2, "the page number wraps at the page count");
+        assert_eq!(m.bus.read(0x8100), 0xa3, "the fixed page never moves");
+        m.bus.write(0xffc0, 0);
+        assert_eq!(m.bus.read(0xc100), 0xa2, "a write chooses nothing");
+        m.bus.peek(0xffc3);
+        assert_eq!(m.bus.read(0xc100), 0xa2, "a peek chooses nothing");
+    }
+
+    #[test]
+    fn a_mega_cart_boots_from_its_last_page_and_switches_under_the_cpu() {
+        let mut m = Coleco::new(Firmware::Hle, &mega_cart()).unwrap();
+        for _ in 0..2 {
+            m.run_frame();
+        }
+        assert_eq!(m.cpu.pc, 0x8209, "running the last page's code");
+        assert_eq!(m.bus.ram[0], 0xa2, "read through page 2");
+    }
+
+    #[test]
+    fn a_mega_cart_page_is_machine_state() {
+        let mut a = Coleco::new(Firmware::Hle, &mega_cart()).unwrap();
+        a.bus.read(0xffc2);
+        let s = a.save_state();
+        let mut b = Coleco::new(Firmware::Hle, &mega_cart()).unwrap();
+        b.load_state(&s).unwrap();
+        assert_eq!(b.bus.read(0xc100), 0xa2);
+        // A page the cartridge does not have is refused.
+        let mut bad = s.clone();
+        *bad.last_mut().unwrap() = 4;
+        assert_eq!(b.load_state(&bad), Err(LoadError::BadValue("Mega Cart page past the cartridge")));
+    }
+
+    #[test]
+    fn over_32k_is_a_mega_cart_only_with_its_header_in_the_last_page() {
+        assert!(is_mega_cart(&mega_cart()));
+        let mut header_first = vec![0u8; 4 * PAGE];
+        header_first[0..2].copy_from_slice(&[0x55, 0xaa]);
+        assert!(!is_mega_cart(&header_first));
+        assert!(matches!(Coleco::new(Firmware::Hle, &header_first), Err(MachineError::CartTooLarge(0x10000))));
+        let mut short = mega_cart();
+        short.truncate(0x8000 + 4);
+        assert!(!is_mega_cart(&short), "not whole pages");
+        let mut plain = vec![0u8; 0x8000];
+        plain[0x4000..0x4002].copy_from_slice(&[0x55, 0xaa]);
+        assert!(!is_mega_cart(&plain), "32 KB is a plain cartridge whatever it holds");
+        assert!(Coleco::new(Firmware::Hle, &plain).is_ok());
     }
 
     #[test]

@@ -22,7 +22,8 @@ it came from and at which commit.
 | BIOS | ✅ its own, see below; the real one is never needed |
 | Save states | ✅ full machine state; a state reloads exactly as it was saved |
 | Memory map | ✅ SYSTEM_RAM and a memory descriptor, so achievements, cheats and RAM watch all address the core |
-| Mega Cart bank switching | ❌ not yet: cartridges over 32 KB do not load |
+| Mega Cart bank switching | ✅ up to 1 MB; the other boards over 32 KB (the 64 KB ones with the header up front) do not load yet |
+| Super Game Module | ❌ not yet: most new homebrew needs its extra RAM and sound chip, and says so on screen |
 | Speed rollers and steering wheel | ❌ not yet: the Super Action controllers and the Expansion Module 2 wheel have no input |
 | PAL | ❌ NTSC only |
 
@@ -39,6 +40,11 @@ past (Dr. Seuss's Fix-Up the Mix-Up Puzzler, Facemaker, Gateway to Apshai,
 Moonsweeper, Nova Blast, Omega Race, Telly Turtle, The Yolk's on You). Of 48
 public-domain and homebrew titles, 45 reach gameplay, the same as on the real
 BIOS.
+
+Of 28 Mega Cart homebrew titles, all 28 boot, and the 7 that run on a plain
+ColecoVision play (Mario Bros., Mecha-8, Mecha-9, Pac-Man Collection, Princess
+Quest, Super Space Acer, Zombie Near). The rest stop on their own "requires the
+Super Game Module" screen.
 
 ## The BIOS
 

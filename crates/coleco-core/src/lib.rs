@@ -76,7 +76,8 @@ pub const BIOS_SIZE: usize = 8 * 1024;
 /// v1: the first layout (Z80, RAM, VDP, PSG and resampler, controller mode,
 /// the NMI line, the line cycle counter), 2026-09-27.
 /// v2: whether a scanline is open, so a state can be taken mid-line.
-pub const SAVE_STATE_VERSION: u32 = 2;
+/// v3: the Mega Cart page at `$C000` (0 on a plain cartridge), 2026-09-28.
+pub const SAVE_STATE_VERSION: u32 = 3;
 
 /// How the machine gets its BIOS behaviour.
 ///
