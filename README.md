@@ -18,12 +18,12 @@ it came from and at which commit.
 | CPU (Z80A, 3.58 MHz) | ✅ from MegaRust; ZEXDOC and ZEXALL pass |
 | Video (TMS9918A) | ✅ Graphics I and II, text and multicolour modes, 32 sprites with the four-per-line limit, collision and fifth-sprite flags |
 | Sound (SN76489AN) | ✅ three tone channels and noise, TI's 15-bit noise register; 44.1 kHz |
+| Super Game Module | ✅ its 32 KB of RAM and AY-3-8910 sound chip, always plugged in |
 | Controllers | ✅ joystick, two fire buttons and the 12-key keypad, both ports |
 | BIOS | ✅ its own, see below; the real one is never needed |
 | Save states | ✅ full machine state; a state reloads exactly as it was saved |
 | Memory map | ✅ SYSTEM_RAM and a memory descriptor, so achievements, cheats and RAM watch all address the core |
 | Mega Cart bank switching | ✅ up to 1 MB; the other boards over 32 KB (the 64 KB ones with the header up front) do not load yet |
-| Super Game Module | ❌ not yet: most new homebrew needs its extra RAM and sound chip, and says so on screen |
 | Speed rollers and steering wheel | ❌ not yet: the Super Action controllers and the Expansion Module 2 wheel have no input |
 | PAL | ❌ NTSC only |
 
@@ -41,10 +41,11 @@ Moonsweeper, Nova Blast, Omega Race, Telly Turtle, The Yolk's on You). Of 48
 public-domain and homebrew titles, 45 reach gameplay, the same as on the real
 BIOS.
 
-Of 28 Mega Cart homebrew titles, all 28 boot, and the 7 that run on a plain
-ColecoVision play (Mario Bros., Mecha-8, Mecha-9, Pac-Man Collection, Princess
-Quest, Super Space Acer, Zombie Near). The rest stop on their own "requires the
-Super Game Module" screen.
+All 28 Mega Cart homebrew titles tried reach their games, the 21 of them made
+for the Super Game Module included (Knightmare, Gauntlet, Wizard of Wor, the
+Super Game editions of Zaxxon, Subroc and Buck Rogers, and more). The module
+changes nothing for the original library: the full smoke test gives the same
+result, title for title, with it plugged in.
 
 ## The BIOS
 
@@ -68,7 +69,7 @@ A real BIOS dump is only ever a development tool, to compare against.
 crates/
   coleco-core/      the emulator library (no I/O deps)
     src/z80/        the CPU
-    src/{vdp, psg, machine, save}.rs
+    src/{vdp, psg, ay, machine, save}.rs
     src/hle/        the BIOS: routines, sound driver, objects, timers, transforms
   coleco-libretro/  libretro core (the .so / .dll for libretro frontends)
   coleco-runner/    headless tools: renders, the smoke test, BIOS comparisons, ZEXALL

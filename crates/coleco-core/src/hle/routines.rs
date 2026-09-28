@@ -91,7 +91,7 @@ pub(super) fn set_ram16(bus: &mut ColecoBus, addr: u16, v: u16) {
 const TABLE_BASES: u16 = 0x73f2;
 /// Graphics mode 2 is in force: register 0's shadow, bit 1.
 pub(super) fn mode2(bus: &ColecoBus) -> bool {
-    bus.ram[0x3c3] & 0x02 != 0
+    bus.peek(0x73c3) & 0x02 != 0
 }
 
 /// Run the routine at `target`, if it is written. `None` when it is not
@@ -409,7 +409,7 @@ fn table_address(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
         count <<= shift;
         cpu.set_a(0);
     } else {
-        cpu.set_a(bus.ram[0x3c3]);
+        cpu.set_a(bus.peek(0x73c3));
     }
     set_ram16(bus, 0x73fe, count);
     let slot = TABLE_BASES.wrapping_add(2 * code as u16);
@@ -434,7 +434,7 @@ pub(super) fn put_vram(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     use crate::z80::Bus;
     // PUSH AF, CP 0, JR NZ; for table 0, LD A,(nn), CP 1, JR NZ.
     let head = if cpu.a() != 0 { 11 + 7 + 12 } else { 11 + 7 + 7 + 13 + 7 };
-    if cpu.a() == 0 && bus.ram[0x3c7] == 1 {
+    if cpu.a() == 0 && bus.peek(0x73c7) == 1 {
         // The real one scales only the low bytes of index and count, by 4.
         let src = cpu.hl();
         let e = (cpu.de() as u8).wrapping_shl(2);
@@ -1009,8 +1009,8 @@ fn write_register(cpu: &mut Z80, bus: &mut ColecoBus) -> i32 {
     bus.vdp.write_control(c);
     bus.vdp.write_control(b.wrapping_add(0x80));
     match b {
-        0 => bus.ram[0x3c3] = c,
-        1 => bus.ram[0x3c4] = c,
+        0 => bus.poke(0x73c3, c),
+        1 => bus.poke(0x73c4, c),
         _ => {}
     }
     // Left as the real one leaves them: the last test is B against 1, and

@@ -24,6 +24,15 @@
 //! the header, since it is the one the machine starts in; that is how a Mega
 //! Cart image is told from a plain one, which has its header at the start.
 //!
+//! **The Super Game Module** is always plugged in, as it is on most
+//! emulators: games made for it test for it and say so on screen when it is
+//! missing, and games made before it never touch its ports. It adds 32 KB of
+//! RAM and an AY-3-8910 ([`crate::ay`]). Writing bit 0 of port `$53` puts its
+//! RAM at `$2000-$7FFF`, over the 1 KB; clearing bit 1 of port `$7F` puts it
+//! at `$0000-$1FFF`, over the BIOS. `$50` selects an AY register, `$51`
+//! writes it and `$52` reads it. These five ports are decoded in full; they
+//! sit in the two ranges the console itself leaves unused.
+//!
 //! Ports are decoded on address bits 7-5 only, so each function owns 32 ports:
 //! `$80` writes select keypad mode, `$A0` is the VDP (bit 0: data or
 //! control), `$C0` writes select joystick mode, `$E0` writes go to the PSG and
@@ -48,6 +57,9 @@ pub const CYCLES_PER_LINE: i32 = 228;
 
 /// Leading magic on a ColecoRust state, so it can never be fed to another core.
 pub const STATE_MAGIC: &[u8; 8] = b"COLECO01";
+
+/// The Super Game Module's RAM.
+pub const SGM_RAM: usize = 0x8000;
 
 /// Largest cartridge the plain map addresses.
 pub const MAX_CART: usize = 0x8000;
@@ -152,6 +164,12 @@ pub struct ColecoBus {
     /// The page at `$C000-$FFFF` on a Mega Cart.
     page: u8,
     pub ram: [u8; WORK_RAM],
+    /// The Super Game Module's 32 KB.
+    pub sgm_ram: Box<[u8; SGM_RAM]>,
+    /// Its RAM over the BIOS at `$0000-$1FFF` (port `$7F` bit 1 clear).
+    sgm_low: bool,
+    /// Its RAM at `$2000-$7FFF` (port `$53` bit 0).
+    sgm_high: bool,
     pub vdp: Vdp,
     pub audio: Audio,
     pub pads: [Pad; 2],
@@ -213,10 +231,29 @@ impl ColecoBus {
         self.irq_rose
     }
 
+    /// Whether the BIOS is where the CPU sees it, rather than the Super Game
+    /// Module's RAM. The HLE traps only while it is.
+    pub fn bios_mapped(&self) -> bool {
+        !self.sgm_low
+    }
+
+    /// A write with no probe, to wherever the CPU would write: for the HLE's
+    /// own stores to the BIOS's variables.
+    pub fn poke(&mut self, addr: u16, val: u8) {
+        match addr {
+            0x0000..=0x1fff if self.sgm_low => self.sgm_ram[addr as usize] = val,
+            0x2000..=0x7fff if self.sgm_high => self.sgm_ram[addr as usize] = val,
+            0x6000..=0x7fff => self.ram[addr as usize & (WORK_RAM - 1)] = val,
+            _ => {}
+        }
+    }
+
     /// A read with no side effects and no probe: for instrumentation.
     pub fn peek(&self, addr: u16) -> u8 {
         match addr {
+            0x0000..=0x1fff if self.sgm_low => self.sgm_ram[addr as usize],
             0x0000..=0x1fff => self.bios[addr as usize],
+            0x2000..=0x7fff if self.sgm_high => self.sgm_ram[addr as usize],
             0x2000..=0x5fff => 0xff,
             0x6000..=0x7fff => self.ram[addr as usize & (WORK_RAM - 1)],
             _ if self.pages == 0 => *self.cart.get(addr as usize - 0x8000).unwrap_or(&0xff),
@@ -241,13 +278,14 @@ impl Bus for ColecoBus {
         if let Some(p) = &mut self.probe {
             p.write(addr);
         }
-        if let 0x6000..=0x7fff = addr {
-            self.ram[addr as usize & (WORK_RAM - 1)] = val;
-        }
+        self.poke(addr, val);
     }
 
     fn input(&mut self, port: u16) -> u8 {
         let p = port as u8;
+        if p == 0x52 {
+            return self.audio.ay.read();
+        }
         match p & 0xe0 {
             0xa0 => {
                 if p & 1 == 0 {
@@ -270,6 +308,13 @@ impl Bus for ColecoBus {
 
     fn output(&mut self, port: u16, val: u8) {
         let p = port as u8;
+        match p {
+            0x50 => return self.audio.ay.select(val),
+            0x51 => return self.audio.ay.write(val),
+            0x53 => return self.sgm_high = val & 1 != 0,
+            0x7f => return self.sgm_low = val & 2 == 0,
+            _ => {}
+        }
         match p & 0xe0 {
             0x80 => self.keypad_mode = true,
             0xa0 => {
@@ -324,6 +369,9 @@ impl Coleco {
             // Real SRAM powers up as noise. Zero is chosen for determinism;
             // the BIOS clears what it uses.
             ram: [0; WORK_RAM],
+            sgm_ram: Box::new([0; SGM_RAM]),
+            sgm_low: false,
+            sgm_high: false,
             vdp: Vdp::new(),
             audio: Audio::new(),
             pads: [Pad::default(); 2],
@@ -394,7 +442,7 @@ impl Coleco {
                 }
             }
             let pc = self.cpu.pc;
-            let trapped = if self.hle && pc < 0x2000 {
+            let trapped = if self.hle && pc < 0x2000 && self.bus.bios_mapped() {
                 crate::hle::trap(&mut self.cpu, &mut self.bus, &mut self.hle_log)
             } else {
                 None
@@ -499,6 +547,9 @@ impl Coleco {
         w.i32(self.bus.line_cycles);
         w.bool(self.bus.in_line);
         w.u8(self.bus.page);
+        w.bytes(&self.bus.sgm_ram[..]);
+        w.bool(self.bus.sgm_low);
+        w.bool(self.bus.sgm_high);
         w.into_bytes()
     }
 
@@ -526,6 +577,9 @@ impl Coleco {
             return Err(LoadError::BadValue("Mega Cart page past the cartridge"));
         }
         self.bus.page = page;
+        r.bytes(&mut self.bus.sgm_ram[..])?;
+        self.bus.sgm_low = r.bool()?;
+        self.bus.sgm_high = r.bool()?;
         self.next_frame_end = None;
         r.finish()
     }
@@ -756,8 +810,80 @@ mod tests {
         assert_eq!(b.bus.read(0xc100), 0xa2);
         // A page the cartridge does not have is refused.
         let mut bad = s.clone();
-        *bad.last_mut().unwrap() = 4;
+        // The page, then the SGM's RAM and its two switches.
+        let at = s.len() - SGM_RAM - 3;
+        assert_eq!(bad[at], 2);
+        bad[at] = 4;
         assert_eq!(b.load_state(&bad), Err(LoadError::BadValue("Mega Cart page past the cartridge")));
+    }
+
+    #[test]
+    fn sgm_ram_maps_over_the_upper_ram_and_over_the_bios() {
+        let mut m = machine_with(&[0x12], 0x100);
+        m.bus.write(0x6005, 0x42);
+        m.bus.write(0x2000, 0x99);
+        assert_eq!(m.bus.read(0x2000), 0xff, "open bus until the SGM is switched in");
+        m.bus.output(0x53, 0x01);
+        m.bus.write(0x2000, 0x77);
+        m.bus.write(0x6005, 0x55);
+        assert_eq!((m.bus.read(0x2000), m.bus.read(0x6005)), (0x77, 0x55));
+        assert_eq!(m.bus.read(0x6405), 0x00, "24 KB, no mirrors");
+        m.bus.output(0x53, 0x00);
+        assert_eq!(m.bus.read(0x6005), 0x42, "the 1 KB, untouched underneath");
+        assert_eq!(m.bus.read(0x2000), 0xff);
+
+        assert_eq!(m.bus.read(0x0100), 0x12, "the BIOS");
+        m.bus.output(0x7f, 0x0d);
+        assert_eq!(m.bus.read(0x0100), 0x00, "the SGM's RAM over it");
+        m.bus.write(0x0100, 0x34);
+        assert_eq!(m.bus.read(0x0100), 0x34);
+        m.bus.output(0x7f, 0x0f);
+        assert_eq!(m.bus.read(0x0100), 0x12, "the BIOS back, unwritten");
+    }
+
+    /// A cartridge that swaps the BIOS out and runs its own code in the
+    /// SGM's RAM at a BIOS address runs that code, not an HLE routine.
+    #[test]
+    fn the_hle_does_not_trap_code_in_sgm_ram() {
+        // $8100: LD A,$0D; OUT ($7F),A; LD HL,$FE18; LD ($0100),HL; JP $0100
+        let mut cart = vec![0u8; 0x200];
+        cart[0..2].copy_from_slice(&[0x55, 0xaa]);
+        cart[0x0a..0x0c].copy_from_slice(&[0x00, 0x81]);
+        let code = [0x3e, 0x0d, 0xd3, 0x7f, 0x21, 0x18, 0xfe, 0x22, 0x00, 0x01, 0xc3, 0x00, 0x01];
+        cart[0x100..0x100 + code.len()].copy_from_slice(&code);
+        let mut m = Coleco::new(Firmware::Hle, &cart).unwrap();
+        m.run_frame();
+        assert_eq!(m.cpu.pc, 0x0100, "spinning on its own JR $");
+        assert!(m.hle_log.wild.is_empty(), "{:?}", m.hle_log.wild);
+    }
+
+    #[test]
+    fn the_ay_answers_on_its_ports() {
+        let mut m = machine_with(&[], 0);
+        m.bus.output(0x50, 0x01);
+        m.bus.output(0x51, 0xff);
+        assert_eq!(m.bus.input(0x52), 0x0f, "coarse tone is four bits");
+        m.bus.output(0x50, 0x00);
+        m.bus.output(0x51, 0xa5);
+        assert_eq!(m.bus.input(0x52), 0xa5);
+        assert_eq!(m.bus.audio.ay.registers()[1], 0x0f);
+    }
+
+    #[test]
+    fn the_sgm_is_machine_state() {
+        let mut a = machine_with(&[], 0);
+        a.bus.output(0x53, 0x01);
+        a.bus.output(0x7f, 0x0d);
+        a.bus.write(0x0123, 0x45);
+        a.bus.write(0x4567, 0x89);
+        a.bus.output(0x50, 0x08);
+        a.bus.output(0x51, 0x0c);
+        let s = a.save_state();
+        let mut b = machine_with(&[], 0);
+        b.load_state(&s).unwrap();
+        assert_eq!((b.bus.read(0x0123), b.bus.read(0x4567)), (0x45, 0x89));
+        assert_eq!(b.bus.input(0x52), 0x0c);
+        assert_eq!(b.save_state(), s);
     }
 
     #[test]

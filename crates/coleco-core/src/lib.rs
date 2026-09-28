@@ -41,6 +41,7 @@
 //! real BIOS puts, where the real BIOS puts it, and keep its own state on the
 //! host side.
 
+pub mod ay;
 pub mod census;
 pub mod hle;
 pub mod machine;
@@ -77,7 +78,9 @@ pub const BIOS_SIZE: usize = 8 * 1024;
 /// the NMI line, the line cycle counter), 2026-09-27.
 /// v2: whether a scanline is open, so a state can be taken mid-line.
 /// v3: the Mega Cart page at `$C000` (0 on a plain cartridge), 2026-09-28.
-pub const SAVE_STATE_VERSION: u32 = 3;
+/// v4: the Super Game Module: its AY-3-8910, 32 KB of RAM and the two
+/// switches that map it, 2026-09-28.
+pub const SAVE_STATE_VERSION: u32 = 4;
 
 /// How the machine gets its BIOS behaviour.
 ///

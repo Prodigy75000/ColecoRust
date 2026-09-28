@@ -259,7 +259,10 @@ impl SaveState for Psg {
     }
 }
 
-/// The PSG plus a box-filter resampler driven by integer counters.
+/// The PSG, the Super Game Module's AY-3-8910 beside it, and a box-filter
+/// resampler driven by integer counters. The AY ticks on the PSG's step
+/// (see [`crate::ay`]), and the two are summed.
+///
 ///
 /// Every CPU clock adds `SAMPLE_RATE * PSG_DIVIDER` to a numerator and a
 /// sample is due each time it passes `CPU_HZ * PSG_DIVIDER`, with the
@@ -269,6 +272,7 @@ impl SaveState for Psg {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Audio {
     pub psg: Psg,
+    pub ay: crate::ay::Ay,
     /// CPU clocks not yet consumed by a PSG step.
     step_accum: u32,
     /// Sample-clock numerator.
@@ -288,7 +292,7 @@ impl Default for Audio {
 
 impl Audio {
     pub fn new() -> Self {
-        Audio { psg: Psg::new(), step_accum: 0, sample_accum: 0, sum: 0, count: 0, out: Vec::new() }
+        Audio { psg: Psg::new(), ay: crate::ay::Ay::new(), step_accum: 0, sample_accum: 0, sum: 0, count: 0, out: Vec::new() }
     }
 
     /// Advance by `cycles` CPU clocks.
@@ -297,7 +301,9 @@ impl Audio {
         while self.step_accum >= PSG_DIVIDER {
             self.step_accum -= PSG_DIVIDER;
             self.psg.step();
-            self.sum += self.psg.output() as i64;
+            self.ay.step();
+            let mixed = self.psg.output() as i32 + self.ay.output() as i32;
+            self.sum += mixed.clamp(i16::MIN as i32, i16::MAX as i32) as i64;
             self.count += 1;
             self.sample_accum += SAMPLE_RATE as u64 * PSG_DIVIDER as u64;
             let due = crate::CPU_HZ as u64;
@@ -314,6 +320,7 @@ impl Audio {
 impl SaveState for Audio {
     fn save(&self, w: &mut WriteCursor) {
         self.psg.save(w);
+        self.ay.save(w);
         w.u32(self.step_accum);
         w.u64(self.sample_accum);
         w.i64(self.sum);
@@ -322,6 +329,7 @@ impl SaveState for Audio {
 
     fn load(&mut self, r: &mut ReadCursor) -> Result<(), LoadError> {
         self.psg.load(r)?;
+        self.ay.load(r)?;
         self.step_accum = r.u32()?;
         self.sample_accum = r.u64()?;
         self.sum = r.i64()?;
