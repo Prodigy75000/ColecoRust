@@ -177,6 +177,18 @@ impl Vdp {
         }
     }
 
+    /// Draw every visible line again from the current registers and VRAM,
+    /// leaving the status register as it was: drawing sprites sets the
+    /// fifth-sprite and collision flags, and a redraw is not the machine
+    /// scanning a frame, so it must not raise them.
+    pub fn redraw(&mut self) {
+        let status = self.status;
+        for line in 0..HEIGHT {
+            self.render_line(line);
+        }
+        self.status = status;
+    }
+
     /// Finish the current line and move to the next.
     pub fn end_line(&mut self) {
         self.line += 1;

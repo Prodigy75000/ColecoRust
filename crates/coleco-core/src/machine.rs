@@ -519,6 +519,8 @@ impl Coleco {
                 }
             }
             let pc = self.cpu.pc;
+            // Before the trap: an HLE routine spends some of its time inside.
+            let closed_before = self.bus.lines_closed;
             let trapped = if self.hle && pc < 0x2000 && self.bus.bios_mapped() {
                 crate::hle::trap(&mut self.cpu, &mut self.bus, &mut self.hle_log)
             } else {
@@ -536,6 +538,16 @@ impl Coleco {
             }
             c += s;
             self.bus.spend(c);
+            // A step that ran a whole frame or more (only an HLE routine can)
+            // is shown as one picture for every frame it spans, so that
+            // picture is drawn whole from where the routine left the VDP. The
+            // lines drawn on the way were drawn at different moments of it,
+            // and the one in progress when the routine changed the backdrop
+            // or the display stayed as it was: a black stripe across Donkey
+            // Kong's menu for thirteen frames.
+            if self.bus.lines_closed - closed_before >= vdp::LINES_PER_FRAME as u64 {
+                self.bus.vdp.redraw();
+            }
         }
         // A rising edge during the step. Still high: the next step's poll
         // takes it, as it always did, told the line was low before. Already
@@ -734,6 +746,29 @@ mod tests {
         let fill = 60 + 41 * 0x4000u64;
         assert!(m.cycles() <= 10 * frame + fill + 1000, "{} cycles for 10 frames", m.cycles());
         assert!(m.cycles() >= 10 * frame, "{} cycles for 10 frames", m.cycles());
+    }
+
+    /// GAME_OPT clears VRAM over about eleven frames in one HLE step, then
+    /// sets a blue backdrop. The frames that step spans all show the picture
+    /// it leaves, so that picture must be whole: the line the clear ended on
+    /// was begun under the black backdrop and stayed a black stripe across
+    /// the menu for thirteen frames (Donkey Kong, BurgerTime) until redrawn.
+    #[test]
+    fn a_step_spanning_frames_leaves_no_stale_line() {
+        // $8100: CALL GAME_OPT ($1F7C); JR $.
+        let mut cart = vec![0u8; 0x200];
+        cart[0..2].copy_from_slice(&[0x55, 0xaa]);
+        cart[0x0a..0x0c].copy_from_slice(&[0x00, 0x81]);
+        cart[0x100..0x105].copy_from_slice(&[0xcd, 0x7c, 0x1f, 0x18, 0xfe]);
+        let mut m = Coleco::new(Firmware::Hle, &cart).unwrap();
+        for f in 0..3 {
+            m.run_frame();
+            let black: Vec<usize> = (0..192)
+                .filter(|&y| m.framebuffer()[y * 256..(y + 1) * 256].iter().all(|&p| p == 0xff00_0000))
+                .collect();
+            assert!(black.is_empty(), "frame {f}: all-black rows {black:?}");
+        }
+        assert_eq!(m.bus.vdp.regs[7] & 0x0f, 4, "the menu's dark blue backdrop");
     }
 
     /// A call to a BIOS address that is no routine returns to its caller and
